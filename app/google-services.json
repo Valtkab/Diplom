@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "616587771271",
+    "project_id": "baristamessenger",
+    "storage_bucket": "baristamessenger.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:616587771271:android:d47cfb6e6b76dba8286722",
+        "android_client_info": {
+          "package_name": "com.example.baristamessenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChuMcryWe5upYpFD_4DugeGC2O0plNRA8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
