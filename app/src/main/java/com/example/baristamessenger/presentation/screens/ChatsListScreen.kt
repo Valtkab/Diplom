@@ -44,16 +44,7 @@ fun ChatsListScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF4E342E), // Тёмно-кофейная шапка
                     titleContentColor = Color.White
-                ),
-                actions = {
-                    IconButton(onClick = onProfileClick) {
-                        Icon(
-                            imageVector = Icons.Default.Person, // Сделали имя коротким и чистым
-                            contentDescription = "Профиль",
-                            tint = Color.White
-                        )
-                    }
-                }
+                )
             )
         },
 

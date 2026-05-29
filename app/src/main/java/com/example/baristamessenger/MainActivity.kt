@@ -12,12 +12,11 @@ import com.example.baristamessenger.presentation.Screen
 import com.example.baristamessenger.presentation.screens.ChatScreen
 import com.example.baristamessenger.presentation.screens.ChatsListScreen
 import com.example.baristamessenger.presentation.screens.LoginScreen
+import com.example.baristamessenger.presentation.screens.MainFlowScreen
 import com.example.baristamessenger.presentation.screens.ProfileScreen
-import com.example.baristamessenger.presentation.screens.RegisterScreen // Импортируем новый экран
+import com.example.baristamessenger.presentation.screens.RegisterScreen
 import com.example.baristamessenger.presentation.viewmodel.AuthViewModel
 import org.koin.androidx.compose.koinViewModel
-
-
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,7 +31,8 @@ class MainActivity : ComponentActivity() {
                 composable(Screen.Login.route) {
                     LoginScreen(
                         onLoginSuccess = {
-                            navController.navigate(Screen.ChatsList.route) {
+                            // ИСПРАВЛЕНО: Переходим на главный экран с нижней навигацией
+                            navController.navigate("main_flow") {
                                 popUpTo(Screen.Login.route) { inclusive = true }
                             }
                         },
@@ -47,8 +47,9 @@ class MainActivity : ComponentActivity() {
                 composable(Screen.Register.route) {
                     RegisterScreen(
                         onRegisterSuccess = {
-                            navController.navigate(Screen.ChatsList.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
+                            // ИСПРАВЛЕНО: После регистрации тоже переходим в главное меню
+                            navController.navigate("main_flow") {
+                                popUpTo(Screen.Register.route) { inclusive = true }
                             }
                         },
                         onBackToLogin = {
@@ -90,6 +91,20 @@ class MainActivity : ComponentActivity() {
                         onLogout = {
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.ChatsList.route) { inclusive = true }
+                            }
+                        }
+                    )
+                }
+
+                // 6. ИСПРАВЛЕНО: Новый главный экран с нижней панелью навигации (вынесен отдельно)
+                // Внутри NavHost в MainActivity.kt
+                composable("main_flow") {
+                    MainFlowScreen(
+                        currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        navController = navController, // ИСПРАВЛЕНО: Передаем навигатор внутрь главного экрана
+                        onLogout = {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo("main_flow") { inclusive = true }
                             }
                         }
                     )

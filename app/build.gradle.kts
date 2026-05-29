@@ -85,4 +85,5 @@ dependencies {
     // Библиотека для авторизации пользователей через интернет
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("androidx.navigation:navigation-compose:2.8.0-alpha08") // Версия адаптирована под твой Compose 2.0+
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }
