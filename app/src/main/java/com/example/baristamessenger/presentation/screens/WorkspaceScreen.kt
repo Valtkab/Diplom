@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons // ДОБАВЛЕН ИМПОРТ
+import androidx.compose.material.icons.automirrored.filled.ArrowBack // ДОБАВЛЕН ИМПОРТ
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,7 +36,9 @@ enum class ShiftStatus {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkspaceScreen() {
+fun WorkspaceScreen(
+    onBackClick: () -> Unit // Параметр успешно подключен
+) {
 
     // 💡 ТЕПЕРЬ ТУТ НЕТ ТУМБЛЛЕРА!
     // Изменяй это значение вручную для тестирования:
@@ -59,7 +63,16 @@ fun WorkspaceScreen() {
         topBar = {
             TopAppBar(
                 title = { Text("Шифт-менеджмент", color = Color.White) },
-                // ИСПРАВЛЕНО: Блок actions с тумблером полностью удален! Шапка теперь чистая.
+                // ИСПРАВЛЕНО: Добавлена кнопка "Назад"
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = Color.White
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1E1E))
             )
         },

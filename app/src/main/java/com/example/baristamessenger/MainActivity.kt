@@ -9,13 +9,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.baristamessenger.presentation.Screen
-import com.example.baristamessenger.presentation.screens.ChatScreen
-import com.example.baristamessenger.presentation.screens.ChatsListScreen
-import com.example.baristamessenger.presentation.screens.LoginScreen
-import com.example.baristamessenger.presentation.screens.MainFlowScreen
-import com.example.baristamessenger.presentation.screens.ProfileScreen
-import com.example.baristamessenger.presentation.screens.RegisterScreen
+import com.example.baristamessenger.presentation.screens.*
 import com.example.baristamessenger.presentation.viewmodel.AuthViewModel
+import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 
 class MainActivity : ComponentActivity() {
@@ -27,11 +23,9 @@ class MainActivity : ComponentActivity() {
 
             NavHost(navController = navController, startDestination = Screen.Login.route) {
 
-                // 1. Экран авторизации (Вход)
                 composable(Screen.Login.route) {
                     LoginScreen(
                         onLoginSuccess = {
-                            // ИСПРАВЛЕНО: Переходим на главный экран с нижней навигацией
                             navController.navigate("main_flow") {
                                 popUpTo(Screen.Login.route) { inclusive = true }
                             }
@@ -43,11 +37,9 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // 2. Экран регистрации
                 composable(Screen.Register.route) {
                     RegisterScreen(
                         onRegisterSuccess = {
-                            // ИСПРАВЛЕНО: После регистрации тоже переходим в главное меню
                             navController.navigate("main_flow") {
                                 popUpTo(Screen.Register.route) { inclusive = true }
                             }
@@ -59,19 +51,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // 3. Экран списка рабочих чатов
-                composable(Screen.ChatsList.route) {
-                    ChatsListScreen(
-                        onChatClick = { chatId ->
-                            navController.navigate(Screen.Chat.createRoute(chatId))
-                        },
-                        onProfileClick = {
-                            navController.navigate(Screen.Profile.route)
-                        }
-                    )
-                }
-
-                // 4. Экран самого чата (переписки)
+                // Глобальный экран переписки
                 composable(
                     route = Screen.Chat.route,
                     arguments = listOf(navArgument("chatId") { type = NavType.StringType })
@@ -82,32 +62,35 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // 5. Экран профиля бариста
-                composable(Screen.Profile.route) {
-                    ProfileScreen(
-                        onBackClick = {
-                            navController.popBackStack()
-                        },
-                        onLogout = {
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(Screen.ChatsList.route) { inclusive = true }
-                            }
-                        }
-                    )
-                }
-
-                // 6. ИСПРАВЛЕНО: Новый главный экран с нижней панелью навигации (вынесен отдельно)
-                // Внутри NavHost в MainActivity.kt
+                // Главный поток приложения (внутри него живет нижнее меню)
                 composable("main_flow") {
                     MainFlowScreen(
-                        currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
-                        navController = navController, // ИСПРАВЛЕНО: Передаем навигатор внутрь главного экрана
+                        currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
+                        navController = navController,
                         onLogout = {
                             navController.navigate(Screen.Login.route) {
                                 popUpTo("main_flow") { inclusive = true }
                             }
                         }
                     )
+                }
+
+                // Внутренние экраны фич (открываются поверх нижней панели)
+                composable(Screen.Calculator.route) {
+                    CostCalculatorScreen(onBackClick = { navController.popBackStack() })
+                }
+
+                composable(Screen.Market.route) {
+                    MarketScreen(onBackClick = { navController.popBackStack() })
+                }
+
+                composable(Screen.Help.route) {
+                    HelpScreen(onBackClick = { navController.popBackStack() })
+                }
+
+// ИСПРАВЛЕНО: Теперь при переходе на Биржу откроется твой экран из WorkspaceScreen!
+                composable(Screen.Exchange.route) {
+                    WorkspaceScreen(onBackClick = { navController.popBackStack() })
                 }
             }
         }

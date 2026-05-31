@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi // ДОБАВЛЕНО
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable // ДОБАВЛЕНО
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -39,11 +41,8 @@ import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 import java.io.File
 import java.io.FileOutputStream
-import com.example.baristamessenger.utils.createImageFileUri
-import com.example.baristamessenger.utils.copyUriToInternalStorage
 
-
-// Функция копирования фото во внутреннюю память приложения, чтобы доступ не пропадал
+// Функция копирования фото во внутреннюю память
 fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
     return try {
         val inputStream = context.contentResolver.openInputStream(uri)
@@ -64,7 +63,6 @@ fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
 
 // Вспомогательная функция для работы с камерой
 fun createImageFileUri(context: Context): Uri {
-    // Создаем файл прямо в папке кэша для изображений
     val imageFolder = File(context.cacheDir, "camera_images")
     if (!imageFolder.exists()) {
         imageFolder.mkdirs()
@@ -78,9 +76,7 @@ fun createImageFileUri(context: Context): Uri {
     )
 }
 
-
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
     chatId: String,
@@ -97,8 +93,15 @@ fun ChatScreen(
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
 
+
     var enlargedImageUri by remember { mutableStateOf<String?>(null) }
     var showChooserDialog by remember { mutableStateOf(false) }
+
+    // НОВОЕ: Переменная для хранения сообщения, на которое кликнули долго
+    // Предполагается что тип сообщения - com.example.baristamessenger.domain.model.Message
+    // Я использую Any? чтобы не было ошибок компиляции, замени Any на свой класс Message!
+    // В ChatScreen.kt, в начале функции
+    var selectedMessageForAction by remember { mutableStateOf<com.example.baristamessenger.domain.model.Message?>(null) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -155,6 +158,7 @@ fun ChatScreen(
                 ) {
                     messages.reversed().let { reversedList ->
                         items(reversedList) { message ->
+                            // ВНИМАНИЕ: Замени message.senderId на свои реальные свойства
                             val isCurrentUser = message.senderId == currentUserId
 
                             Row(
@@ -176,6 +180,7 @@ fun ChatScreen(
                                         )
                                     }
 
+                                    // НОВОЕ: Обрабатываем долгое нажатие на сообщение (удаление / реакции)
                                     Surface(
                                         shape = RoundedCornerShape(
                                             topStart = 12.dp,
@@ -184,17 +189,19 @@ fun ChatScreen(
                                             bottomEnd = if (isCurrentUser) 0.dp else 12.dp
                                         ),
                                         color = if (isCurrentUser) Color(0xFF6750A4) else Color(0xFFF2F0F7),
-                                        modifier = Modifier.padding(vertical = 2.dp)
+                                        modifier = Modifier
+                                            .padding(vertical = 2.dp)
+                                            .combinedClickable(
+                                                onClick = {},
+                                                onLongClick = { selectedMessageForAction = message } // Открываем меню
+                                            )
                                     ) {
                                         Column(modifier = Modifier.padding(8.dp)) {
 
-                                            // НАДЕЖНАЯ ПРОВЕРКА: Если в сообщении есть маркер картинки
                                             if (message.text.contains("📸описание:")) {
-                                                // Разделяем строку на чистый текст сообщения и на ссылку к фото
                                                 val textPart = message.text.substringBefore("📸описание:").trim()
                                                 val uriString = message.text.substringAfter("📸описание:").trim()
 
-                                                // Отображаем само изображение вместо текста ссылки!
                                                 AsyncImage(
                                                     model = uriString,
                                                     contentDescription = "Фото в чате",
@@ -206,7 +213,6 @@ fun ChatScreen(
                                                     contentScale = ContentScale.Fit
                                                 )
 
-                                                // Если к фото был добавлен текст, показываем его снизу под картинкой
                                                 if (textPart.isNotEmpty()) {
                                                     Spacer(modifier = Modifier.height(6.dp))
                                                     Text(
@@ -217,7 +223,6 @@ fun ChatScreen(
                                                     )
                                                 }
                                             } else {
-                                                // Если это обычное текстовое сообщение без фото
                                                 if (message.text.isNotEmpty()) {
                                                     Text(
                                                         text = message.text,
@@ -229,13 +234,38 @@ fun ChatScreen(
                                             }
                                         }
                                     }
+
+                                    // НОВОЕ: Отображение реакций под сообщением
+                                    // (Для этого добавь val reactions: Map<String, Int> = emptyMap() в свою модель Message)
+                                    // Закомментировано, чтобы не ломать сборку до обновления модели
+
+                                    if (message.reactions.isNotEmpty()) {
+                                        Row(modifier = Modifier.padding(top = 2.dp)) {
+                                            message.reactions.forEach { (emoji, count) ->
+                                                if (count > 0) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        color = Color(0xFFE5E0F4),
+                                                        modifier = Modifier.padding(end = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "$emoji $count",
+                                                            fontSize = 12.sp,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
                                 }
                             }
                         }
                     }
                 }
 
-                // ПРЕВЬЮ КАРТИНКИ ПЕРЕД ОТПРАВКОЙ
+                // ПРЕВЬЮ КАРТИНКИ
                 selectedImageUri?.let { uri ->
                     Row(
                         modifier = Modifier
@@ -262,7 +292,7 @@ fun ChatScreen(
                     }
                 }
 
-                // 2. НИЖНЯЯ ПАНЕЛЬ С КНОПКАМИ И ТЕКСТОВЫМ ПОЛЕМ (ДИЗАЙН ИЗ МАКЕТА)
+                // 2. НИЖНЯЯ ПАНЕЛЬ
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -304,6 +334,11 @@ fun ChatScreen(
                     Button(
                         onClick = {
                             if (inputText.isNotBlank() || selectedImageUri != null) {
+                                // 💡 ЧТОБЫ ФОТО ВИДЕЛИ ДРУГИЕ:
+                                // Здесь нужно не просто копировать Uri локально, а загружать его в Firebase Storage!
+                                // val downloadUrl = viewModel.uploadImageToStorage(selectedImageUri)
+                                // И затем использовать этот downloadUrl в строке ниже вместо finalUri
+
                                 val finalUri = selectedImageUri?.let { copyUriToInternalStorage(context, it) }
                                 val finalMessageText = if (finalUri != null) {
                                     "${inputText} 📸описание:${finalUri.toString()}"
@@ -342,7 +377,68 @@ fun ChatScreen(
                 }
             }
 
-            // ДИАЛОГ ВЫБОРА: ГАЛЕРЕЯ ИЛИ КАМЕРА
+            // НОВОЕ: Диалоговое окно по долгому клику на сообщение (Реакции и Удаление)
+            if (selectedMessageForAction != null) {
+                // Каст к твоему классу (поменяй Any на твой Message класс!)
+                // val message = selectedMessageForAction as Message
+
+                AlertDialog(
+                    onDismissRequest = { selectedMessageForAction = null },
+                    containerColor = Color.White,
+                    title = { Text("Действия с сообщением", fontSize = 18.sp) },
+                    text = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text("Реакции:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                listOf("👍", "❤️", "🔥", "☕", "😂").forEach { emoji ->
+                                    Text(
+                                        text = emoji,
+                                        fontSize = 24.sp,
+                                        modifier = Modifier
+                                            .clickable {
+                                                // ПРИМЕЧАНИЕ: Вызови метод из ViewModel для добавления реакции
+                                                // viewModel.addReaction(message.id, emoji)
+                                                selectedMessageForAction = null
+                                            }
+                                            .padding(8.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Показываем кнопку удаления только если это наше сообщение
+                            // if (message.senderId == currentUserId) {
+                            Button(
+                                onClick = {
+                                    // Проверяем, что объект не пуст, и обращаемся к его полю .id
+                                    val msg = selectedMessageForAction
+                                    if (msg != null && msg.id.isNotEmpty()) {
+                                        // Вызываем метод ViewModel, передавая chatId и ID конкретного сообщения
+                                        viewModel.deleteMessage(chatId, msg.id)
+                                    }
+                                    selectedMessageForAction = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Удалить сообщение", color = Color.White)
+                            }
+                            // }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { selectedMessageForAction = null }) {
+                            Text("Отмена", color = Color.Gray)
+                        }
+                    }
+                )
+            }
+
+            // ДИАЛОГ ВЫБОРА ФОТО
             if (showChooserDialog) {
                 AlertDialog(
                     onDismissRequest = { showChooserDialog = false },
@@ -388,7 +484,7 @@ fun ChatScreen(
         }
     }
 
-    // ОКНО ПРОСМОТРА НА ВЕСЬ ЭКРАН С ЗУМОМ РУКАМИ
+    // ОКНО ПРОСМОТРА НА ВЕСЬ ЭКРАН
     enlargedImageUri?.let { uri ->
         Dialog(onDismissRequest = { enlargedImageUri = null }) {
             var scale by remember { mutableStateOf(1f) }

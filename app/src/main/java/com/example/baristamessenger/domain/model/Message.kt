@@ -7,5 +7,6 @@ data class Message(
     val senderName: String = "", // ДОБАВИЛИ ПОЛЕ
     val text: String = "",
     val timestamp: Long = 0L,
-    val isRecipe: Boolean = false
+    val isRecipe: Boolean = false,
+    val reactions: Map<String, Int> = emptyMap()
 )

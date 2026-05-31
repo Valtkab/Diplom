@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.baristamessenger.domain.model.Message
 import com.example.baristamessenger.domain.repository.MessageRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,5 +67,23 @@ class ChatViewModel(
             // ИСПРАВЛЕНО: вызываем saveMessage вместо sendMessage, как прописано в репозитории
             repository.saveMessage(newMessage)
         }
+    }
+    fun deleteMessage(chatId: String, messageId: String) {
+        if (messageId.isEmpty()) return
+
+        FirebaseFirestore.getInstance()
+            .collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .document(messageId)
+            .delete()
+            .addOnSuccessListener {
+                // После успешного удаления в Firebase,
+                // Firebase автоматически пришлет обновление в SnapshotListener,
+                // и список сообщений обновится сам собой.
+            }
+            .addOnFailureListener { e ->
+                e.printStackTrace() // Посмотри в Logcat, если здесь ошибка!
+            }
     }
 }

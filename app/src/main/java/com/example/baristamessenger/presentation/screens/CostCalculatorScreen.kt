@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons // ДОБАВЛЕН ИМПОРТ
+import androidx.compose.material.icons.automirrored.filled.ArrowBack // ДОБАВЛЕН ИМПОРТ
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +21,9 @@ import com.example.baristamessenger.domain.model.Ingredient
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CostCalculatorScreen() {
+fun CostCalculatorScreen(
+    onBackClick: () -> Unit // Добавили и подключили параметр кнопки назад
+) {
     var drinkName by remember { mutableStateOf("Лавандовый раф") }
     var drinkVolume by remember { mutableStateOf("350") }
     var markupPercentage by remember { mutableStateOf(300f) }
@@ -41,10 +45,9 @@ fun CostCalculatorScreen() {
     val totalCost = ingredients.sumOf { it.price }
     val recommendedPrice = totalCost * (1 + markupPercentage / 100)
 
-    // Выносим общие стили для полей ввода, чтобы текст ВСЕГДА был белым
     val customTextFieldColors = TextFieldDefaults.colors(
-        focusedTextColor = Color.White,       // ИСПРАВЛЕНО: Цвет текста при нажатии
-        unfocusedTextColor = Color.White,     // ИСПРАВЛЕНО: Цвет текста в обычном состоянии
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
         focusedContainerColor = Color(0xFF1E1E1E),
         unfocusedContainerColor = Color(0xFF1E1E1E),
         focusedPlaceholderColor = Color.Gray,
@@ -57,6 +60,16 @@ fun CostCalculatorScreen() {
         topBar = {
             TopAppBar(
                 title = { Text("Калькулятор себестоимости ☕", color = Color.White) },
+                // ИСПРАВЛЕНО: Добавлена кнопка возврата на предыдущий экран
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = Color.White
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1E1E))
             )
         },
@@ -76,7 +89,7 @@ fun CostCalculatorScreen() {
                     value = drinkName,
                     onValueChange = { drinkName = it },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    colors = customTextFieldColors // Применяем белые цвета текста
+                    colors = customTextFieldColors
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -86,7 +99,7 @@ fun CostCalculatorScreen() {
                     onValueChange = { drinkVolume = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    colors = customTextFieldColors // Применяем белые цвета текста
+                    colors = customTextFieldColors
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -184,7 +197,7 @@ fun CostCalculatorScreen() {
                         value = newIngName,
                         onValueChange = { newIngName = it },
                         placeholder = { Text("Название (например: Молоко)") },
-                        colors = customTextFieldColors // Применяем белые цвета текста
+                        colors = customTextFieldColors
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     TextField(
@@ -192,7 +205,7 @@ fun CostCalculatorScreen() {
                         onValueChange = { newIngAmount = it },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         placeholder = { Text("Количество (г/мл)") },
-                        colors = customTextFieldColors // Применяем белые цвета текста
+                        colors = customTextFieldColors
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     TextField(
@@ -200,7 +213,7 @@ fun CostCalculatorScreen() {
                         onValueChange = { newIngPrice = it },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         placeholder = { Text("Стоимость порции (₽)") },
-                        colors = customTextFieldColors // Применяем белые цвета текста
+                        colors = customTextFieldColors
                     )
                 }
             },

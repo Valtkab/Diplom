@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.baristamessenger.domain.model.Chat
 import com.example.baristamessenger.domain.repository.MessageRepository
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,5 +49,20 @@ class ChatsListViewModel(
             // Сохраняем каждый тестовый чат в Room базу данных
             testChats.forEach { repository.saveChat(it) }
         }
+    }
+
+    // Внутри класса ChatsListViewModel
+    fun deleteChat(chatId: String) {
+        FirebaseFirestore.getInstance().collection("chats").document(chatId).delete()
+            .addOnFailureListener { /* обработка ошибки */ }
+    }
+
+    fun createChat(name: String, isChannel: Boolean) {
+        val newChat = hashMapOf(
+            "name" to name,
+            "isChannel" to isChannel,
+            "lastMessage" to ""
+        )
+        FirebaseFirestore.getInstance().collection("chats").add(newChat)
     }
 }
