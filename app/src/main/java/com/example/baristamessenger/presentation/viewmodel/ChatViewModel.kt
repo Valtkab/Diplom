@@ -43,11 +43,16 @@ class ChatViewModel(
     }
 
     fun loadMessages(chatId: String) {
-        viewModelScope.launch {
-            repository.getMessages(chatId).collect { listOfMessages ->
-                _messages.value = listOfMessages
+        FirebaseFirestore.getInstance()
+            .collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    // Преобразуем документы в список Message
+                    _messages.value = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                }
             }
-        }
     }
 
     fun sendMessage(chatId: String, text: String) {

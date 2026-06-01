@@ -41,6 +41,7 @@ import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 import java.io.File
 import java.io.FileOutputStream
+import com.example.baristamessenger.domain.model.Message
 
 // Функция копирования фото во внутреннюю память
 fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
@@ -92,6 +93,7 @@ fun ChatScreen(
     var inputText by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
 
 
     var enlargedImageUri by remember { mutableStateOf<String?>(null) }
@@ -436,6 +438,28 @@ fun ChatScreen(
                         }
                     }
                 )
+
+                Button(
+                    onClick = {
+                        selectedMessageForAction?.let { msg ->
+                            // Удаляем сообщение из Firestore
+                            viewModel.deleteMessage(chatId, msg.id)
+
+                            // Если фото было локальным (во внутренней памяти),
+                            // его можно удалить физически из папки (опционально)
+                            if (msg.text.contains("📸описание:")) {
+                                val uriString = msg.text.substringAfter("📸описание:").trim()
+                                // Если нужно очистить физический файл из памяти телефона:
+                                File(Uri.parse(uriString).path).delete()
+                            }
+                        }
+                        selectedMessageForAction = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Удалить сообщение и фото", color = Color.White)
+                }
             }
 
             // ДИАЛОГ ВЫБОРА ФОТО
