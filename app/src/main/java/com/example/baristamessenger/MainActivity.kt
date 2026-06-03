@@ -13,10 +13,16 @@ import com.example.baristamessenger.presentation.screens.*
 import com.example.baristamessenger.presentation.viewmodel.AuthViewModel
 import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
+import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ИСПРАВЛЕНО: Перенесли сюда (до setContent).
+        // Теперь Android официально разрешает элементам плавно реагировать на клавиатуру.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContent {
             val navController = rememberNavController()
             val authViewModel: AuthViewModel = koinViewModel()
@@ -88,7 +94,7 @@ class MainActivity : ComponentActivity() {
                     HelpScreen(onBackClick = { navController.popBackStack() })
                 }
 
-// ИСПРАВЛЕНО: Теперь при переходе на Биржу откроется твой экран из WorkspaceScreen!
+                // ИСПРАВЛЕНО: Теперь при переходе на Биржу откроется твой экран из WorkspaceScreen!
                 composable(Screen.Exchange.route) {
                     WorkspaceScreen(onBackClick = { navController.popBackStack() })
                 }

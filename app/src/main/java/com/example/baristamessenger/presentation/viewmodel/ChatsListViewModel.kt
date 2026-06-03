@@ -18,8 +18,8 @@ class ChatsListViewModel(
     val chats: StateFlow<List<Chat>> = _chats.asStateFlow()
 
     init {
+        // Оставили только загрузку реальных данных
         loadChats()
-        generateTestChats() // Временно создаем фейковые чаты для проверки интерфейса
     }
 
     private fun loadChats() {
@@ -38,25 +38,13 @@ class ChatsListViewModel(
         }
     }
 
-    // Метод создания тестовых данных
-    private fun generateTestChats() {
-        viewModelScope.launch {
-            val testChats = listOf(
-                Chat("chat_1", "Общий чат смены ☕", "Кто оставил грязный питчер?", System.currentTimeMillis()),
-                Chat("chat_2", "Шеф-бариста / Рецепты", "Обновили ТТК на айс-латте", System.currentTimeMillis() - 100000),
-                Chat("chat_3", "Заказ зерна и молока 🥛", "Молоко приедет к 10:00", System.currentTimeMillis() - 500000)
-            )
-            // Сохраняем каждый тестовый чат в Room базу данных
-            testChats.forEach { repository.saveChat(it) }
-        }
-    }
-
-    // Внутри класса ChatsListViewModel
+    // Удаление чата из Firebase Firestore
     fun deleteChat(chatId: String) {
         FirebaseFirestore.getInstance().collection("chats").document(chatId).delete()
             .addOnFailureListener { /* обработка ошибки */ }
     }
 
+    // Создание нового чата/канала в Firebase Firestore
     fun createChat(name: String, isChannel: Boolean) {
         val newChat = hashMapOf(
             "name" to name,

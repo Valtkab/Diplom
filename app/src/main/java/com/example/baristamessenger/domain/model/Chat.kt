@@ -5,5 +5,6 @@ data class Chat(
     val name: String,        // Название чата (например, "Общий чат смены ☕")
     val lastMessage: String, // Текст последнего сообщения для превью на экране списка
     val timestamp: Long,     // Время последнего сообщения (чтобы сортировать чаты от свежих к старым)\
+    val type: String = "chat",
     val isChannel: Boolean = false
 )

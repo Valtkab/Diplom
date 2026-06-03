@@ -4,16 +4,17 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi // ДОБАВЛЕНО
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable // ДОБАВЛЕНО
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -33,7 +34,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.baristamessenger.presentation.viewmodel.ChatViewModel
@@ -41,9 +41,7 @@ import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 import java.io.File
 import java.io.FileOutputStream
-import com.example.baristamessenger.domain.model.Message
 
-// Функция копирования фото во внутреннюю память
 fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
     return try {
         val inputStream = context.contentResolver.openInputStream(uri)
@@ -62,7 +60,6 @@ fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
     }
 }
 
-// Вспомогательная функция для работы с камерой
 fun createImageFileUri(context: Context): Uri {
     val imageFolder = File(context.cacheDir, "camera_images")
     if (!imageFolder.exists()) {
@@ -93,17 +90,12 @@ fun ChatScreen(
     var inputText by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
-
-
-
     var enlargedImageUri by remember { mutableStateOf<String?>(null) }
     var showChooserDialog by remember { mutableStateOf(false) }
 
-    // НОВОЕ: Переменная для хранения сообщения, на которое кликнули долго
-    // Предполагается что тип сообщения - com.example.baristamessenger.domain.model.Message
-    // Я использую Any? чтобы не было ошибок компиляции, замени Any на свой класс Message!
-    // В ChatScreen.kt, в начале функции
-    var selectedMessageForAction by remember { mutableStateOf<com.example.baristamessenger.domain.model.Message?>(null) }
+    var selectedMessageForAction by remember {
+        mutableStateOf<com.example.baristamessenger.domain.model.Message?>(null)
+    }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -124,440 +116,376 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Чат кофейни ☕", color = Color.Black, fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Text(
+                        "Чат кофейни",
+                        color = Color(0xFFFFD700),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Назад",
-                            tint = Color.Black
+                            tint = Color(0xFFFFD700)
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFE8E2FA))
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Black
+                )
             )
         },
-        containerColor = Color.White
+        containerColor = Color(0xFF121212),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .navigationBarsPadding()
-                    .imePadding()
-            ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = paddingValues.calculateTopPadding())
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
 
-                // 1. СПИСОК СООБЩЕНИЙ
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 12.dp),
-                    reverseLayout = true,
-                    verticalArrangement = Arrangement.Bottom
-                ) {
-                    messages.reversed().let { reversedList ->
-                        items(reversedList) { message ->
-                            // ВНИМАНИЕ: Замени message.senderId на свои реальные свойства
-                            val isCurrentUser = message.senderId == currentUserId
+            val scrollState = rememberLazyListState()
 
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
-                            ) {
-                                Column(
-                                    modifier = Modifier.widthIn(max = 280.dp),
-                                    horizontalAlignment = if (isCurrentUser) Alignment.End else Alignment.Start
-                                ) {
-                                    if (!isCurrentUser) {
-                                        Text(
-                                            text = message.senderName.ifEmpty { "Бариста" },
-                                            fontSize = 12.sp,
-                                            color = Color.Gray,
-                                            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-                                        )
-                                    }
-
-                                    // НОВОЕ: Обрабатываем долгое нажатие на сообщение (удаление / реакции)
-                                    Surface(
-                                        shape = RoundedCornerShape(
-                                            topStart = 12.dp,
-                                            topEnd = 12.dp,
-                                            bottomStart = if (isCurrentUser) 12.dp else 0.dp,
-                                            bottomEnd = if (isCurrentUser) 0.dp else 12.dp
-                                        ),
-                                        color = if (isCurrentUser) Color(0xFF6750A4) else Color(0xFFF2F0F7),
-                                        modifier = Modifier
-                                            .padding(vertical = 2.dp)
-                                            .combinedClickable(
-                                                onClick = {},
-                                                onLongClick = { selectedMessageForAction = message } // Открываем меню
-                                            )
-                                    ) {
-                                        Column(modifier = Modifier.padding(8.dp)) {
-
-                                            if (message.text.contains("📸описание:")) {
-                                                val textPart = message.text.substringBefore("📸описание:").trim()
-                                                val uriString = message.text.substringAfter("📸описание:").trim()
-
-                                                AsyncImage(
-                                                    model = uriString,
-                                                    contentDescription = "Фото в чате",
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .wrapContentHeight()
-                                                        .clip(RoundedCornerShape(8.dp))
-                                                        .clickable { enlargedImageUri = uriString },
-                                                    contentScale = ContentScale.Fit
-                                                )
-
-                                                if (textPart.isNotEmpty()) {
-                                                    Spacer(modifier = Modifier.height(6.dp))
-                                                    Text(
-                                                        text = textPart,
-                                                        color = if (isCurrentUser) Color.White else Color.Black,
-                                                        fontSize = 15.sp,
-                                                        modifier = Modifier.padding(horizontal = 4.dp)
-                                                    )
-                                                }
-                                            } else {
-                                                if (message.text.isNotEmpty()) {
-                                                    Text(
-                                                        text = message.text,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                                                        fontSize = 15.sp,
-                                                        color = if (isCurrentUser) Color.White else Color.Black
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // НОВОЕ: Отображение реакций под сообщением
-                                    // (Для этого добавь val reactions: Map<String, Int> = emptyMap() в свою модель Message)
-                                    // Закомментировано, чтобы не ломать сборку до обновления модели
-
-                                    if (message.reactions.isNotEmpty()) {
-                                        Row(modifier = Modifier.padding(top = 2.dp)) {
-                                            message.reactions.forEach { (emoji, count) ->
-                                                if (count > 0) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(12.dp),
-                                                        color = Color(0xFFE5E0F4),
-                                                        modifier = Modifier.padding(end = 4.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = "$emoji $count",
-                                                            fontSize = 12.sp,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                }
-                            }
-                        }
-                    }
+            LaunchedEffect(messages.size) {
+                if (messages.isNotEmpty()) {
+                    scrollState.animateScrollToItem(0)
                 }
+            }
 
-                // ПРЕВЬЮ КАРТИНКИ
-                selectedImageUri?.let { uri ->
+            LazyColumn(
+                state = scrollState,
+                reverseLayout = true,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(
+                    items = messages.sortedByDescending { it.timestamp },
+                    key = { it.id }
+                ) { message ->
+
+                    val isCurrentUser = message.senderId == currentUserId
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFF2F0F7))
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 2.dp),
+                        horizontalArrangement =
+                            if (isCurrentUser) Arrangement.End
+                            else Arrangement.Start
                     ) {
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = "Превью",
-                            modifier = Modifier
-                                .size(54.dp)
-                                .clip(RoundedCornerShape(6.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Изображение готово", color = Color.Black, fontSize = 14.sp)
+                        Column(
+                            modifier = Modifier.widthIn(max = 280.dp),
+                            horizontalAlignment =
+                                if (isCurrentUser) Alignment.End
+                                else Alignment.Start
+                        ) {
 
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(onClick = { selectedImageUri = null }) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Удалить", tint = Color.Red)
+                            if (!isCurrentUser) {
+                                Text(
+                                    text = message.senderName.ifEmpty { "Бариста" },
+                                    fontSize = 12.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(
+                                        start = 4.dp,
+                                        bottom = 2.dp
+                                    )
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(
+                                    topStart = 12.dp,
+                                    topEnd = 12.dp,
+                                    bottomStart = if (isCurrentUser) 12.dp else 2.dp,
+                                    bottomEnd = if (isCurrentUser) 2.dp else 12.dp
+                                ),
+                                color = if (isCurrentUser)
+                                    Color(0xFFFFD700)
+                                else
+                                    Color(0xFF333333),
+                                modifier = Modifier.combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        selectedMessageForAction = message
+                                    }
+                                )
+                            ){
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    if (message.text.contains("📸описание:")) {
+                                        val textPart = message.text.substringBefore("📸описание:").trim()
+                                        val uriString = message.text.substringAfter("📸описание:").trim()
+
+                                        AsyncImage(
+                                            model = uriString,
+                                            contentDescription = "Фото в чате",
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .wrapContentHeight()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable { enlargedImageUri = uriString },
+                                            contentScale = ContentScale.Fit
+                                        )
+
+                                        if (textPart.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = textPart,
+                                                color = if (isCurrentUser) Color.Black else Color.White,
+                                                fontSize = 15.sp,
+                                                modifier = Modifier.padding(horizontal = 4.dp)
+                                            )
+                                        }
+                                    } else {
+                                        if (message.text.isNotEmpty()) {
+                                            Text(
+                                                text = message.text,
+                                                modifier = Modifier.padding(
+                                                    horizontal = 6.dp,
+                                                    vertical = 2.dp
+                                                ),
+                                                fontSize = 15.sp,
+                                                color = if (isCurrentUser) Color.Black else Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+            }
 
-                // 2. НИЖНЯЯ ПАНЕЛЬ
+            // ПРЕВЬЮ ПРИКРЕПЛЕННОГО ФОТО
+            selectedImageUri?.let { uri ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFFF3EDFA))
-                        .padding(horizontal = 12.dp, vertical = 16.dp),
+                        .background(Color(0xFF2C2C2C))
+                        .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = { showChooserDialog = true },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Прикрепить", tint = Color.Black)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Box(
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = "Превью",
                         modifier = Modifier
-                            .weight(1f)
-                            .height(45.dp)
-                            .background(Color(0xFFE5E0F4), shape = RoundedCornerShape(4.dp))
-                            .border(1.dp, Color(0xFFC7C2D9), shape = RoundedCornerShape(4.dp))
-                            .padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (inputText.isEmpty()) {
-                            Text("Сообщение...", color = Color.Gray, fontSize = 15.sp)
-                        }
-                        BasicTextField(
-                            value = inputText,
-                            onValueChange = { inputText = it },
-                            textStyle = TextStyle(color = Color.Black, fontSize = 15.sp),
-                            modifier = Modifier.fillMaxWidth()
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(6.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Изображение готово", color = Color.White, fontSize = 14.sp)
+
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = { selectedImageUri = null }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Удалить",
+                            tint = Color(0xFFFFD700)
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Button(
-                        onClick = {
-                            if (inputText.isNotBlank() || selectedImageUri != null) {
-                                // 💡 ЧТОБЫ ФОТО ВИДЕЛИ ДРУГИЕ:
-                                // Здесь нужно не просто копировать Uri локально, а загружать его в Firebase Storage!
-                                // val downloadUrl = viewModel.uploadImageToStorage(selectedImageUri)
-                                // И затем использовать этот downloadUrl в строке ниже вместо finalUri
-
-                                val finalUri = selectedImageUri?.let { copyUriToInternalStorage(context, it) }
-                                val finalMessageText = if (finalUri != null) {
-                                    "${inputText} 📸описание:${finalUri.toString()}"
-                                } else {
-                                    inputText
-                                }
-                                viewModel.sendMessage(chatId, finalMessageText)
-                                inputText = ""
-                                selectedImageUri = null
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text("Отпр.", color = Color.White, fontSize = 14.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    Button(
-                        onClick = {
-                            if (inputText.isNotBlank()) {
-                                viewModel.sendMessage(chatId, inputText)
-                                inputText = ""
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7A5765)),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text("ТТК", color = Color.White, fontSize = 14.sp)
-                    }
                 }
             }
 
-            // НОВОЕ: Диалоговое окно по долгому клику на сообщение (Реакции и Удаление)
-            if (selectedMessageForAction != null) {
-                // Каст к твоему классу (поменяй Any на твой Message класс!)
-                // val message = selectedMessageForAction as Message
+            // НИЖНЯЯ ПАНЕЛЬ ВВОДА
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1E1E1E))
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { showChooserDialog = true },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Прикрепить",
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
 
-                AlertDialog(
-                    onDismissRequest = { selectedMessageForAction = null },
-                    containerColor = Color.White,
-                    title = { Text("Действия с сообщением", fontSize = 18.sp) },
-                    text = {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text("Реакции:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                listOf("👍", "❤️", "🔥", "☕", "😂").forEach { emoji ->
-                                    Text(
-                                        text = emoji,
-                                        fontSize = 24.sp,
-                                        modifier = Modifier
-                                            .clickable {
-                                                // ПРИМЕЧАНИЕ: Вызови метод из ViewModel для добавления реакции
-                                                // viewModel.addReaction(message.id, emoji)
-                                                selectedMessageForAction = null
-                                            }
-                                            .padding(8.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Показываем кнопку удаления только если это наше сообщение
-                            // if (message.senderId == currentUserId) {
-                            Button(
-                                onClick = {
-                                    // Проверяем, что объект не пуст, и обращаемся к его полю .id
-                                    val msg = selectedMessageForAction
-                                    if (msg != null && msg.id.isNotEmpty()) {
-                                        // Вызываем метод ViewModel, передавая chatId и ID конкретного сообщения
-                                        viewModel.deleteMessage(chatId, msg.id)
-                                    }
-                                    selectedMessageForAction = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Удалить сообщение", color = Color.White)
-                            }
-                            // }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { selectedMessageForAction = null }) {
-                            Text("Отмена", color = Color.Gray)
-                        }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 45.dp, max = 120.dp)
+                        .background(Color(0xFF333333), shape = RoundedCornerShape(20.dp))
+                        .border(1.dp, Color(0xFF555555), shape = RoundedCornerShape(20.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (inputText.isEmpty()) {
+                        Text("Сообщение...", color = Color.Gray, fontSize = 15.sp)
                     }
-                )
+                    BasicTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // ИСПРАВЛЕНО: Убрали блок ТТК. Кнопка отправки теперь постоянная.
+                val isSendEnabled = inputText.isNotBlank() || selectedImageUri != null
                 Button(
                     onClick = {
-                        selectedMessageForAction?.let { msg ->
-                            // Удаляем сообщение из Firestore
-                            viewModel.deleteMessage(chatId, msg.id)
-
-                            // Если фото было локальным (во внутренней памяти),
-                            // его можно удалить физически из папки (опционально)
-                            if (msg.text.contains("📸описание:")) {
-                                val uriString = msg.text.substringAfter("📸описание:").trim()
-                                // Если нужно очистить физический файл из памяти телефона:
-                                File(Uri.parse(uriString).path).delete()
-                            }
+                        val finalUri = selectedImageUri?.let { copyUriToInternalStorage(context, it) }
+                        val finalMessageText = if (finalUri != null) {
+                            "${inputText} 📸описание:${finalUri.toString()}"
+                        } else {
+                            inputText
                         }
-                        selectedMessageForAction = null
+                        viewModel.sendMessage(chatId, finalMessageText)
+                        inputText = ""
+                        selectedImageUri = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                    modifier = Modifier.fillMaxWidth()
+                    enabled = isSendEnabled,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFD700), // Яркий золотой при активации
+                        disabledContainerColor = Color(0xFFFFD700).copy(alpha = 0.3f) // Полупрозрачный, если пусто
+                    ),
+                    shape = RoundedCornerShape(50),
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(45.dp)
                 ) {
-                    Text("Удалить сообщение и фото", color = Color.White)
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Отправить",
+                        tint = if (isSendEnabled) Color.Black else Color.Gray,
+                        modifier = Modifier.graphicsLayer { rotationZ = 180f }
+                    )
                 }
             }
+        }
 
-            // ДИАЛОГ ВЫБОРА ФОТО
-            if (showChooserDialog) {
-                AlertDialog(
-                    onDismissRequest = { showChooserDialog = false },
-                    title = { Text("Добавить изображение", color = Color.Black, fontSize = 18.sp) },
-                    containerColor = Color.White,
-                    text = {
-                        Column {
-                            Button(
-                                onClick = {
-                                    showChooserDialog = false
-                                    galleryLauncher.launch("image/*")
-                                },
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4))
-                            ) {
-                                Text("Открыть галерею", color = Color.White)
-                            }
-                            Button(
-                                onClick = {
-                                    showChooserDialog = false
-                                    try {
-                                        val uri = createImageFileUri(context)
-                                        tempCameraUri = uri
-                                        cameraLauncher.launch(uri)
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7A5765))
-                            ) {
-                                Text("Сделать снимок (Камера)", color = Color.White)
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showChooserDialog = false }) {
-                            Text("Отмена", color = Color.Black)
+        // ДИАЛОГ УДАЛЕНИЯ СООБЩЕНИЯ
+        if (selectedMessageForAction != null) {
+            AlertDialog(
+                onDismissRequest = { selectedMessageForAction = null },
+                containerColor = Color(0xFF333333),
+                title = { Text("Действие", fontSize = 18.sp, color = Color.White) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                val msg = selectedMessageForAction
+                                if (msg != null && msg.id.isNotEmpty()) {
+                                    viewModel.deleteMessageWithImage(chatId, msg)
+                                }
+                                selectedMessageForAction = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Удалить сообщение", color = Color.White)
                         }
                     }
-                )
-            }
+                },
+                confirmButton = {
+                    TextButton(onClick = { selectedMessageForAction = null }) {
+                        Text("Отмена", color = Color(0xFFFFD700))
+                    }
+                }
+            )
         }
-    }
 
-    // ОКНО ПРОСМОТРА НА ВЕСЬ ЭКРАН
-    enlargedImageUri?.let { uri ->
-        Dialog(onDismissRequest = { enlargedImageUri = null }) {
-            var scale by remember { mutableStateOf(1f) }
-            var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+        // ДИАЛОГ ВЫБОРА ИСТОЧНИКА ФОТО
+        if (showChooserDialog) {
+            AlertDialog(
+                onDismissRequest = { showChooserDialog = false },
+                title = { Text("Добавить изображение", color = Color.White, fontSize = 18.sp) },
+                containerColor = Color(0xFF333333),
+                text = {
+                    Column {
+                        Button(
+                            onClick = {
+                                showChooserDialog = false
+                                galleryLauncher.launch("image/*")
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
+                        ) {
+                            Text("Открыть галерею", color = Color.Black)
+                        }
+                        Button(
+                            onClick = {
+                                showChooserDialog = false
+                                try {
+                                    val uri = createImageFileUri(context)
+                                    tempCameraUri = uri
+                                    cameraLauncher.launch(uri)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5D4037))
+                        ) {
+                            Text("Сделать снимок (Камера)", color = Color.White)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showChooserDialog = false }) {
+                        Text("Отмена", color = Color(0xFFFFD700))
+                    }
+                }
+            )
+        }
 
-            val transformState = rememberTransformableState { zoomChange, offsetChange, _ ->
-                scale = (scale * zoomChange).coerceIn(1f, 4f)
-                offset += offsetChange
-            }
-
+        // ПОЛНОЭКРАННЫЙ ПРОСМОТР ФОТО (ЗУМ)
+        if (enlargedImageUri != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.95f))
-                    .clickable { enlargedImageUri = null },
-                contentAlignment = Alignment.Center
+                    .clickable { enlargedImageUri = null }
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    AsyncImage(
-                        model = uri,
-                        contentDescription = "Фото во весь экран с зумом",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 550.dp)
-                            .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale,
-                                translationX = offset.x,
-                                translationY = offset.y
-                            )
-                            .transformable(state = transformState),
-                        contentScale = ContentScale.Fit
-                    )
+                var scale by remember { mutableStateOf(1f) }
+                var offsetX by remember { mutableStateOf(0f) }
+                var offsetY by remember { mutableStateOf(0f) }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+                    scale = (scale * zoomChange).coerceIn(1f, 4f)
+                    offsetX += panChange.x
+                    offsetY += panChange.y
+                }
 
-                    if (scale == 1f) {
-                        Button(
-                            onClick = { enlargedImageUri = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4))
-                        ) {
-                            Text("Закрыть", color = Color.White)
-                        }
+                LaunchedEffect(scale) {
+                    if (scale <= 1.1f) {
+                        offsetX = 0f
+                        offsetY = 0f
                     }
                 }
+
+                AsyncImage(
+                    model = enlargedImageUri,
+                    contentDescription = "Просмотр фото",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 800.dp)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offsetX,
+                            translationY = offsetY
+                        )
+                        .transformable(state = transformState)
+                        .align(Alignment.Center),
+                    contentScale = ContentScale.Fit
+                )
             }
         }
     }

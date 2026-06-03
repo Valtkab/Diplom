@@ -86,4 +86,6 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("androidx.navigation:navigation-compose:2.8.0-alpha08") // Версия адаптирована под твой Compose 2.0+
     implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("com.google.firebase:firebase-storage:21.0.1") // Добавь эту строку
+    implementation("com.google.firebase:firebase-firestore:25.0.0")
 }

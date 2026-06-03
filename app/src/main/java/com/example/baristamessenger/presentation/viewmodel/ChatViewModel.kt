@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.google.firebase.storage.FirebaseStorage
+
 
 class ChatViewModel(
     private val repository: MessageRepository
@@ -34,6 +36,8 @@ class ChatViewModel(
         }
     }
 
+
+
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
 
@@ -50,32 +54,51 @@ class ChatViewModel(
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
                     // Преобразуем документы в список Message
-                    _messages.value = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                    _messages.value =
+                        snapshot.documents
+                            .mapNotNull { doc ->
+                                doc.toObject(Message::class.java)?.copy(
+                                    id = doc.id
+                                )
+                            }
+                            .sortedBy { it.timestamp }
                 }
             }
     }
 
     fun sendMessage(chatId: String, text: String) {
-        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
-        // Собираем сообщение строго по твоей модели Message
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
+        val tempId = UUID.randomUUID().toString()
+
         val newMessage = Message(
-            id = "",
+            id = tempId,
             chatId = chatId,
             senderId = uid,
             text = text,
             timestamp = System.currentTimeMillis(),
-            isRecipe = false // Возвращаем параметр, который требовал ChatScreen
+            isRecipe = false
         )
 
+        // Мгновенно показываем сообщение в чате
+        _messages.value = _messages.value + newMessage
+
         viewModelScope.launch {
-            // ИСПРАВЛЕНО: вызываем saveMessage вместо sendMessage, как прописано в репозитории
-            repository.saveMessage(newMessage)
+            try {
+                repository.saveMessage(newMessage)
+            } catch (e: Exception) {
+                e.printStackTrace()
+
+                // если отправка не удалась — убираем сообщение
+                _messages.value =
+                    _messages.value.filterNot { it.id == tempId }
+            }
         }
     }
-    fun deleteMessage(chatId: String, messageId: String) {
-        if (messageId.isEmpty()) return
 
+    fun deleteMessage(chatId: String, messageId: String) {
+        // Эта функция физически удаляет сообщение из Firebase
         FirebaseFirestore.getInstance()
             .collection("chats")
             .document(chatId)
@@ -83,12 +106,46 @@ class ChatViewModel(
             .document(messageId)
             .delete()
             .addOnSuccessListener {
-                // После успешного удаления в Firebase,
-                // Firebase автоматически пришлет обновление в SnapshotListener,
-                // и список сообщений обновится сам собой.
+                // Удаление прошло успешно
             }
             .addOnFailureListener { e ->
-                e.printStackTrace() // Посмотри в Logcat, если здесь ошибка!
+                // Если возникла ошибка, она появится в Logcat
+                e.printStackTrace()
             }
+    }
+
+    fun deleteMessageWithImage(chatId: String, message: Message) {
+        val db = FirebaseFirestore.getInstance()
+
+        // 1. Если в сообщении есть фото, извлекаем путь и удаляем файл
+        if (message.text.contains("📸описание:")) {
+            val imageUrl = message.text.substringAfter("📸описание:").trim()
+
+            try {
+                // Получаем ссылку на файл в Storage по его URL
+                val storageRef = FirebaseStorage.getInstance().getReferenceFromUrl(imageUrl)
+                storageRef.delete().addOnSuccessListener {
+                    // Файл удален, теперь удаляем сообщение из Firestore
+                    deleteMessageFromFirestore(db, chatId, message.id)
+                }.addOnFailureListener {
+                    // Если файл не найден, все равно удаляем сообщение
+                    deleteMessageFromFirestore(db, chatId, message.id)
+                }
+            } catch (e: Exception) {
+                // Если URL некорректный, просто удаляем сообщение
+                deleteMessageFromFirestore(db, chatId, message.id)
+            }
+        } else {
+            // Если фото нет, просто удаляем сообщение
+            deleteMessageFromFirestore(db, chatId, message.id)
+        }
+    }
+
+    private fun deleteMessageFromFirestore(db: FirebaseFirestore, chatId: String, messageId: String) {
+        db.collection("chats")
+            .document(chatId)
+            .collection("messages")
+            .document(messageId)
+            .delete()
     }
 }
