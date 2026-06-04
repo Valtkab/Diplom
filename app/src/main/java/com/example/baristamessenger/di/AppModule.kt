@@ -11,6 +11,7 @@ import org.koin.core.module.dsl.viewModelOf
 import com.example.baristamessenger.presentation.viewmodel.ChatsListViewModel
 import com.example.baristamessenger.presentation.viewmodel.AuthViewModel
 import com.example.baristamessenger.presentation.viewmodel.ProfileViewModel
+import com.example.baristamessenger.presentation.viewmodel.SearchUserViewModel
 
 val appModule = module {
     ->
@@ -40,4 +41,5 @@ val appModule = module {
     viewModelOf(::ChatsListViewModel)
     viewModelOf(::AuthViewModel)
     viewModelOf(::ProfileViewModel)
+    viewModelOf(::SearchUserViewModel)
 }

@@ -15,6 +15,7 @@ import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 import androidx.core.view.WindowCompat
 
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

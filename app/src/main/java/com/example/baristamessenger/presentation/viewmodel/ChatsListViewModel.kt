@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.baristamessenger.domain.model.Chat
 import com.example.baristamessenger.domain.repository.MessageRepository
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +19,6 @@ class ChatsListViewModel(
     val chats: StateFlow<List<Chat>> = _chats.asStateFlow()
 
     init {
-        // Оставили только загрузку реальных данных
         loadChats()
     }
 
@@ -38,19 +38,106 @@ class ChatsListViewModel(
         }
     }
 
-    // Удаление чата из Firebase Firestore
     fun deleteChat(chatId: String) {
-        FirebaseFirestore.getInstance().collection("chats").document(chatId).delete()
-            .addOnFailureListener { /* обработка ошибки */ }
+        FirebaseFirestore.getInstance()
+            .collection("chats")
+            .document(chatId)
+            .delete()
+            .addOnFailureListener {
+                it.printStackTrace()
+            }
     }
 
-    // Создание нового чата/канала в Firebase Firestore
-    fun createChat(name: String, isChannel: Boolean) {
+    fun createChat(
+        name: String,
+        isChannel: Boolean
+    ) {
         val newChat = hashMapOf(
             "name" to name,
             "isChannel" to isChannel,
-            "lastMessage" to ""
+            "lastMessage" to "",
+            "timestamp" to System.currentTimeMillis()
         )
-        FirebaseFirestore.getInstance().collection("chats").add(newChat)
+
+        FirebaseFirestore.getInstance()
+            .collection("chats")
+            .add(newChat)
+    }
+
+    /**
+     * Создание личного чата между двумя сотрудниками
+     */
+    fun createPrivateChat(
+        selectedUserId: String,
+        selectedUserName: String
+    ) {
+
+        val currentUserId =
+            com.google.firebase.auth.FirebaseAuth
+                .getInstance()
+                .currentUser
+                ?.uid ?: return
+
+        val participants = listOf(currentUserId, selectedUserId)
+
+        val chatsRef = FirebaseFirestore.getInstance()
+            .collection("chats")
+
+        // 🔥 1. Ищем уже существующий чат
+        chatsRef
+            .whereArrayContains("participants", currentUserId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+
+                val existingChat = snapshot.documents.firstOrNull { doc ->
+
+                    val list = doc.get("participants") as? List<String>
+                        ?: emptyList()
+
+                    list.containsAll(participants) && list.size == 2
+                }
+
+                if (existingChat != null) {
+                    // 🔥 ЧАТ УЖЕ ЕСТЬ → НИЧЕГО НЕ СОЗДАЁМ
+                    return@addOnSuccessListener
+                }
+
+                // 🔥 2. Если чата нет → создаём новый
+                val chat = hashMapOf(
+                    "name" to selectedUserName,
+                    "lastMessage" to "",
+                    "timestamp" to System.currentTimeMillis(),
+                    "participants" to participants,
+                    "isGroup" to false,
+                    "isChannel" to false
+                )
+
+                chatsRef.add(chat)
+            }
+    }
+
+    fun createGroupChat(
+        name: String,
+        selectedUsers: List<String>
+    ) {
+
+        val currentUserId =
+            FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        val participants = (selectedUsers + currentUserId).distinct()
+
+        val chat = hashMapOf(
+            "name" to name,
+            "lastMessage" to "",
+            "timestamp" to System.currentTimeMillis(),
+            "participants" to participants,
+            "isGroup" to true,
+            "isChannel" to false,
+            "type" to "group"
+        )
+
+        FirebaseFirestore.getInstance()
+            .collection("chats")
+            .add(chat)
     }
 }

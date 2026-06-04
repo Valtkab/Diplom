@@ -84,26 +84,49 @@ class MessageRepositoryImpl(
     // ==========================================
 
     override fun getChats(): Flow<List<Chat>> = callbackFlow {
+
+        val currentUserId =
+            com.google.firebase.auth.FirebaseAuth
+                .getInstance()
+                .currentUser
+                ?.uid
+
         val listener = firestore.collection("chats")
             .addSnapshotListener { snapshot, error ->
+
                 if (error != null) {
                     close(error)
                     return@addSnapshotListener
                 }
 
                 if (snapshot != null) {
-                    val chatsList = snapshot.documents.map { doc ->
+
+                    val chatsList = snapshot.documents.mapNotNull { doc ->
+
+                        val participants =
+                            doc.get("participants") as? List<String> ?: emptyList()
+
+                        // 🔥 ВАЖНО: показываем только чаты, где есть текущий пользователь
+                        if (currentUserId == null || currentUserId !in participants) {
+                            return@mapNotNull null
+                        }
+
                         Chat(
                             id = doc.id,
-                            name = doc.getString("name") ?: "Рабочий чат",
+                            name = doc.getString("name") ?: "Чат",
                             lastMessage = doc.getString("lastMessage") ?: "",
                             timestamp = try {
-                                doc.getLong("timestamp") ?: doc.getString("timestamp")?.toLongOrNull() ?: 0L
+                                doc.getLong("timestamp")
+                                    ?: doc.getString("timestamp")?.toLongOrNull()
+                                    ?: 0L
                             } catch (e: Exception) {
                                 0L
-                            }
+                            },
+                            type = doc.getString("type") ?: "chat",
+                            isChannel = doc.getBoolean("isChannel") ?: false
                         )
                     }
+
                     trySend(chatsList)
                 }
             }

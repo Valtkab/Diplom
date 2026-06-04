@@ -28,9 +28,11 @@ fun ChatsListScreen(
     onProfileClick: () -> Unit,
     viewModel: ChatsListViewModel = koinViewModel()
 ) {
+
     val chats by viewModel.chats.collectAsState()
-    var showCreateDialog by remember { mutableStateOf(false) }
-    var newChatName by remember { mutableStateOf("") }
+
+    var showUserPicker by remember { mutableStateOf(false) }
+    var showGroupDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -38,27 +40,41 @@ fun ChatsListScreen(
                 title = {
                     Text(
                         "Рабочие чаты",
-                        color = Color(0xFFFFD700), // Золотой текст
+                        color = Color(0xFFFFD700),
                         fontWeight = FontWeight.SemiBold
                     )
                 },
-                // ИСПРАВЛЕНО: Плюсик переехал в верхний правый угол (туда, где красный кружок)
                 actions = {
-                    IconButton(onClick = { showCreateDialog = true }) {
+
+                    // 🔥 КНОПКА СОЗДАНИЯ ЛИЧНОГО ЧАТА
+                    IconButton(onClick = {
+                        showUserPicker = true
+                    }) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Создать чат",
-                            tint = Color(0xFFFFD700), // Золотой цвет иконки
-                            modifier = Modifier.size(28.dp)
+                            contentDescription = "Личный чат",
+                            tint = Color(0xFFFFD700),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+
+                    // 🔥 КНОПКА СОЗДАНИЯ ГРУППЫ
+                    IconButton(onClick = {
+                        showGroupDialog = true
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Группа",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black // Чёрная шапка, как в чате
+                    containerColor = Color.Black
                 )
             )
         },
-        // ИСПРАВЛЕНО: Цвет фона всей страницы теперь тёмный, как в чате
         containerColor = Color(0xFF121212)
     ) { paddingValues ->
 
@@ -69,17 +85,19 @@ fun ChatsListScreen(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+
             items(chats) { chat ->
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1E1E1E)) // Тёмная подложка для элемента чата
+                        .background(Color(0xFF1E1E1E))
                         .clickable { onChatClick(chat.id) }
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Аватарка-заглушка чата
+
                     Box(
                         modifier = Modifier
                             .size(45.dp)
@@ -87,6 +105,7 @@ fun ChatsListScreen(
                             .background(Color(0xFFFFD700).copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
+
                         Text(
                             text = chat.name.take(1).uppercase(),
                             color = Color(0xFFFFD700),
@@ -98,12 +117,14 @@ fun ChatsListScreen(
                     Spacer(modifier = Modifier.width(12.dp))
 
                     Column {
+
                         Text(
                             text = chat.name,
                             color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )
+
                         if (chat.lastMessage.isNotEmpty()) {
                             Text(
                                 text = chat.lastMessage,
@@ -117,42 +138,36 @@ fun ChatsListScreen(
             }
         }
 
-        // Диалог создания чата (вызывается по нажатию на плюс в TopAppBar)
-        if (showCreateDialog) {
-            AlertDialog(
-                onDismissRequest = { showCreateDialog = false },
-                containerColor = Color(0xFF333333),
-                title = { Text("Создать новый чат", color = Color.White) },
-                text = {
-                    OutlinedTextField(
-                        value = newChatName,
-                        onValueChange = { newChatName = it },
-                        label = { Text("Название чата") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFFFD700),
-                            focusedLabelColor = Color(0xFFFFD700),
-                            unfocusedTextColor = Color.White,
-                            focusedTextColor = Color.White
-                        )
+        // 🔥 ЛИЧНЫЙ ЧАТ
+        if (showUserPicker) {
+            UserPickerDialog(
+                onDismiss = {
+                    showUserPicker = false
+                },
+                onUserSelected = { user ->
+                    viewModel.createPrivateChat(
+                        user.id,
+                        user.name
                     )
+                    showUserPicker = false
+                }
+            )
+        }
+
+        // 🔥 ГРУППОВОЙ ЧАТ
+        if (showGroupDialog) {
+            GroupCreateDialog(
+                onDismiss = {
+                    showGroupDialog = false
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if (newChatName.isNotBlank()) {
-                                viewModel.createChat(newChatName, isChannel = false)
-                                newChatName = ""
-                                showCreateDialog = false
-                            }
-                        }
-                    ) {
-                        Text("Создать", color = Color(0xFFFFD700))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCreateDialog = false }) {
-                        Text("Отмена", color = Color.Gray)
-                    }
+                onCreate = { name, users ->
+
+                    viewModel.createGroupChat(
+                        name,
+                        users
+                    )
+
+                    showGroupDialog = false
                 }
             )
         }
