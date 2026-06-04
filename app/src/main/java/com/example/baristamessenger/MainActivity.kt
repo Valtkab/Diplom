@@ -85,15 +85,7 @@ class MainActivity : ComponentActivity() {
                 // Внутренние экраны фич (открываются поверх нижней панели)
                 composable(Screen.Calculator.route) {
                     CostCalculatorScreen(onBackClick = { navController.popBackStack() })
-                }
-
-                composable(Screen.Market.route) {
-                    MarketScreen(onBackClick = { navController.popBackStack() })
-                }
-
-                composable(Screen.Help.route) {
-                    HelpScreen(onBackClick = { navController.popBackStack() })
-                }
+                } 
 
                 // ИСПРАВЛЕНО: Теперь при переходе на Биржу откроется твой экран из WorkspaceScreen!
                 composable(Screen.Exchange.route) {
