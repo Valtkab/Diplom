@@ -12,12 +12,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.example.baristamessenger.presentation.viewmodel.AuthViewModel
 
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onRegisterClick: () -> Unit,
+    navController: NavController,
     viewModel: AuthViewModel
 ) {
     var email by remember { mutableStateOf("") }
@@ -25,6 +27,7 @@ fun LoginScreen(
 
     val loginState by viewModel.loginState.collectAsState()
 
+    // Слушаем состояние Firebase. Как только вход успешен — вызываем переход на главный экран
     LaunchedEffect(loginState) {
         if (loginState is AuthViewModel.StateResult.Success) {
             onLoginSuccess()
@@ -44,7 +47,7 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Barista Messenger ☕",
+                text = "Barista Messenger",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF4E342E)
@@ -80,6 +83,7 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Отображение ошибки от Firebase (например, неверный пароль)
             if (loginState is AuthViewModel.StateResult.Error) {
                 Text(
                     text = (loginState as AuthViewModel.StateResult.Error).errorMessage,
@@ -89,6 +93,7 @@ fun LoginScreen(
                 )
             }
 
+            // Показываем индикатор загрузки, пока Firebase проверяет данные
             if (loginState is AuthViewModel.StateResult.Loading) {
                 CircularProgressIndicator(color = Color(0xFF4E342E))
             } else {

@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavHostController // Импорт для главного навигатора
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -31,9 +31,10 @@ sealed class BottomBarItem(val route: String, val title: String, val icon: Image
 
 @Composable
 fun MainFlowScreen(
-    navController: NavHostController, // ✅ ВОЗВРАЩЕНО: Главный навигатор из MainActivity
-    currentUserId: String,            // ✅ ВОЗВРАЩЕНО: ID текущего пользователя
-    onLogout: () -> Unit = {}         // ✅ ИСПРАВЛЕНО: Значение по умолчанию, чтобы MainActivity не ругалась
+    navController: NavController,
+    currentUserId: String,
+    currentUserName: String, // 👈 ИСПРАВЛЕНО: Лишний параметр avController удален
+    onLogout: () -> Unit = {}
 ) {
     val bottomNavController = rememberNavController()
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
@@ -93,7 +94,6 @@ fun MainFlowScreen(
             composable(BottomBarItem.Chats.route) {
                 ChatsListScreen(
                     onChatClick = { chatId ->
-                        // ✅ ВОЗВРАЩЕНО: Переход на экран чата из твоего скриншота image_3f6703
                         navController.navigate(Screen.Chat.createRoute(chatId))
                     },
                     onProfileClick = {
@@ -105,7 +105,8 @@ fun MainFlowScreen(
             // 2. ЭКРАН БИРЖИ СМЕН (Workspace)
             composable(BottomBarItem.Exchange.route) {
                 WorkspaceScreen(
-                    onBackClick = { bottomNavController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    currentUserName = currentUserName // Передаем никнейм дальше в WorkspaceScreen
                 )
             }
 

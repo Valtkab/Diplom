@@ -59,7 +59,7 @@ fun CostCalculatorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Калькулятор себестоимости ☕", color = Color.White) },
+                title = { Text("Калькулятор себестоимости", color = Color.White) },
                 // ИСПРАВЛЕНО: Добавлена кнопка возврата на предыдущий экран
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {

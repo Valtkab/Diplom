@@ -41,6 +41,9 @@ import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 import java.io.File
 import java.io.FileOutputStream
+import com.cloudinary.android.MediaManager
+import com.cloudinary.android.callback.ErrorInfo
+import com.cloudinary.android.callback.UploadCallback
 
 fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
     return try {
@@ -339,17 +342,64 @@ fun ChatScreen(
 
                 // ИСПРАВЛЕНО: Убрали блок ТТК. Кнопка отправки теперь постоянная.
                 val isSendEnabled = inputText.isNotBlank() || selectedImageUri != null
+
                 Button(
                     onClick = {
-                        val finalUri = selectedImageUri?.let { copyUriToInternalStorage(context, it) }
-                        val finalMessageText = if (finalUri != null) {
-                            "${inputText} 📸описание:${finalUri.toString()}"
+                        val imageUri = selectedImageUri
+
+                        if (imageUri != null) {
+
+                            MediaManager.get()
+                                .upload(imageUri)
+                                .callback(object : UploadCallback {
+
+                                    override fun onStart(requestId: String?) {}
+
+                                    override fun onProgress(
+                                        requestId: String?,
+                                        bytes: Long,
+                                        totalBytes: Long
+                                    ) {}
+
+                                    override fun onSuccess(
+                                        requestId: String?,
+                                        resultData: MutableMap<Any?, Any?>?
+                                    ) {
+
+                                        val imageUrl =
+                                            resultData?.get("secure_url").toString()
+
+                                        val messageText =
+                                            "$inputText 📸описание:$imageUrl"
+
+                                        viewModel.sendMessage(chatId, messageText)
+
+                                        inputText = ""
+                                        selectedImageUri = null
+                                    }
+
+                                    override fun onError(
+                                        requestId: String?,
+                                        error: ErrorInfo?
+                                    ) {
+                                        error?.description?.let {
+                                            println(it)
+                                        }
+                                    }
+
+                                    override fun onReschedule(
+                                        requestId: String?,
+                                        error: ErrorInfo?
+                                    ) {}
+                                })
+                                .dispatch()
+
                         } else {
-                            inputText
+
+                            viewModel.sendMessage(chatId, inputText)
+
+                            inputText = ""
                         }
-                        viewModel.sendMessage(chatId, finalMessageText)
-                        inputText = ""
-                        selectedImageUri = null
                     },
                     enabled = isSendEnabled,
                     colors = ButtonDefaults.buttonColors(
