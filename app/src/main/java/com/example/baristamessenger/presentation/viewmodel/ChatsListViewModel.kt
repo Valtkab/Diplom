@@ -30,43 +30,8 @@ class ChatsListViewModel(
         }
     }
 
-    fun onCreateChatClick(chatName: String) {
-        if (chatName.isNotBlank()) {
-            viewModelScope.launch {
-                repository.createChat(chatName)
-            }
-        }
-    }
 
-    fun deleteChat(chatId: String) {
-        FirebaseFirestore.getInstance()
-            .collection("chats")
-            .document(chatId)
-            .delete()
-            .addOnFailureListener {
-                it.printStackTrace()
-            }
-    }
 
-    fun createChat(
-        name: String,
-        isChannel: Boolean
-    ) {
-        val newChat = hashMapOf(
-            "name" to name,
-            "isChannel" to isChannel,
-            "lastMessage" to "",
-            "timestamp" to System.currentTimeMillis()
-        )
-
-        FirebaseFirestore.getInstance()
-            .collection("chats")
-            .add(newChat)
-    }
-
-    /**
-     * Создание личного чата между двумя сотрудниками
-     */
     fun createPrivateChat(
         selectedUserId: String,
         selectedUserName: String

@@ -127,21 +127,12 @@ class ChatViewModel(
             }
     }
 
-    fun deleteMessage(chatId: String, messageId: String) {
-        db.collection("chats")
-            .document(chatId)
-            .collection("messages")
-            .document(messageId)
-            .delete()
-            .addOnFailureListener { e ->
-                e.printStackTrace()
-            }
-    }
+
 
     fun deleteMessageWithImage(chatId: String, message: Message) {
         // 1. Если в сообщении есть фото, извлекаем путь и удаляем файл
-        if (message.text.contains("📸описание:")) {
-            val imageUrl = message.text.substringAfter("📸описание:").trim()
+        if (message.text.contains("описание:")) {
+            val imageUrl = message.text.substringAfter("описание:").trim()
 
             try {
                 val storageRef = FirebaseStorage.getInstance().getReferenceFromUrl(imageUrl)

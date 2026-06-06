@@ -7,8 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,23 +18,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.firestore.FirebaseFirestore // 👈 ДОБАВЛЕН ИМПОРТ ДЛЯ БАЗЫ ДАННЫХ
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 // Структура данных
 data class InteractiveShift(
-    val id: String = "",                     // 👈 Добавлены дефолтные значения для Firebase
-    val date: String = "",                   // 👈 Добавлены дефолтные значения для Firebase
-    val time: String = "",                   // 👈 Добавлены дефолтные значения для Firebase
-    val location: String = "",               // 👈 Добавлены дефолтные значения для Firebase
-    val authorName: String = "",             // 👈 Добавлены дефолтные значения для Firebase
-    val comment: String = "",                // 👈 Добавлены дефолтные значения для Firebase
+    val id: String = "",
+    val date: String = "",
+    val time: String = "",
+    val location: String = "",
+    val authorName: String = "",
+    val authorId: String = "",  // ← добавить ID автора
+    val comment: String = "",
     var status: ShiftStatus = ShiftStatus.OPENED,
-    var baristaWhoResponded: String? = null
+    var baristaWhoResponded: String? = null,
+    var baristaWhoRespondedId: String? = null  // ← добавить ID откликнувшегося
 )
 
 enum class ShiftStatus {
     OPENED,
-    AWAITING_CONFIRMATION,
     CONFIRMED
 }
 
@@ -43,27 +44,69 @@ enum class ShiftStatus {
 @Composable
 fun WorkspaceScreen(
     onBackClick: () -> Unit,
-    currentUserName: String = "Вы" // 👈 Дефолтное значение спасает от ошибок в других файлах!
+    currentUserName: String = "Вы"
 ) {
     val uriHandler = LocalUriHandler.current
     val scheduleSheetUrl = "https://docs.google.com/spreadsheets/d/1s2oEnfiZcmVAkFspVlPsdlosdqBd4mKBzld01KgwOw0/edit?gid=0#gid=0"
 
-    // false — интерфейс для Бариста, true — для Администратора
-    val isAdminMode = false
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
-    // Список абсолютно пустой на старте
+    // Получаем реальный никнейм пользователя из Firebase
+    var realUserName by remember { mutableStateOf(currentUserName) }
+
+    LaunchedEffect(Unit) {
+        if (currentUserId.isNotEmpty()) {
+            val db = FirebaseFirestore.getInstance()
+            db.collection("users").document(currentUserId).get()
+                .addOnSuccessListener { doc ->
+                    val nickname = doc.getString("nickname")
+                        ?: doc.getString("coffeeShop")
+                        ?: doc.getString("email")?.substringBefore("@")
+                        ?: currentUserName
+                    realUserName = nickname
+                }
+        }
+    }
+
+    val isAdminMode = false
     val shiftList = remember { mutableStateListOf<InteractiveShift>() }
 
-    // 🔴 ДОБАВЛЕНО: Синхронизация с Firebase Firestore в реальном времени
+    // Состояния для редактирования
+    var editingShift by remember { mutableStateOf<InteractiveShift?>(null) }
+    var editDate by remember { mutableStateOf("") }
+    var editTime by remember { mutableStateOf("") }
+    var editLocation by remember { mutableStateOf("") }
+    var editComment by remember { mutableStateOf("") }
+
+    // Синхронизация с Firebase
     LaunchedEffect(Unit) {
-        FirebaseFirestore.getInstance().collection("shifts")
-            .addSnapshotListener { snapshot, error ->
-                if (snapshot != null) {
-                    shiftList.clear()
-                    val remoteShifts = snapshot.toObjects(InteractiveShift::class.java)
-                    shiftList.addAll(remoteShifts)
+        val db = FirebaseFirestore.getInstance()
+        db.collection("shifts").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                shiftList.clear()
+                for (doc in snapshot.documents) {
+                    val statusString = doc.getString("status") ?: "OPENED"
+                    val mappedStatus = when (statusString) {
+                        "CONFIRMED" -> ShiftStatus.CONFIRMED
+                        else -> ShiftStatus.OPENED
+                    }
+
+                    val shift = InteractiveShift(
+                        id = doc.id,
+                        date = doc.getString("date") ?: "",
+                        time = doc.getString("time") ?: "",
+                        location = doc.getString("location") ?: "",
+                        authorName = doc.getString("authorName") ?: "",
+                        authorId = doc.getString("authorId") ?: "",
+                        comment = doc.getString("comment") ?: "",
+                        status = mappedStatus,
+                        baristaWhoResponded = doc.getString("baristaWhoResponded"),
+                        baristaWhoRespondedId = doc.getString("baristaWhoRespondedId")
+                    )
+                    shiftList.add(shift)
                 }
             }
+        }
     }
 
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -137,7 +180,6 @@ fun WorkspaceScreen(
                     )
                 }
 
-                // Отображение контента
                 if (shiftList.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -169,6 +211,7 @@ fun WorkspaceScreen(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1B17))
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
+                                    // Заголовок с кнопками
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -176,29 +219,82 @@ fun WorkspaceScreen(
                                     ) {
                                         Text("Замена смены", color = Color(0xFFD7CCC8), fontWeight = FontWeight.Bold, fontSize = 18.sp)
 
-                                        val (statusText, statusColor) = when (shift.status) {
-                                            ShiftStatus.OPENED -> "Открыта" to Color(0xFFFFB74D)
-                                            ShiftStatus.AWAITING_CONFIRMATION -> "Ожидает админа" to Color(0xFF64B5F6)
-                                            ShiftStatus.CONFIRMED -> "Подтверждена" to Color(0xFF81C784)
-                                        }
+                                        Row {
+                                            // Редактирование только для открытых запросов автора
+                                            if (shift.status == ShiftStatus.OPENED && shift.authorId == currentUserId) {
+                                                IconButton(
+                                                    onClick = {
+                                                        editDate = shift.date
+                                                        editTime = shift.time
+                                                        editLocation = shift.location
+                                                        editComment = shift.comment
+                                                        editingShift = shift
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Edit,
+                                                        contentDescription = "Редактировать",
+                                                        tint = Color(0xFFFFD700),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
 
-                                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF3E2723)) {
-                                            Text(statusText, color = statusColor, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp)
+                                            // Удаление для автора или админа
+                                            if (shift.authorId == currentUserId || isAdminMode) {
+                                                IconButton(
+                                                    onClick = {
+                                                        FirebaseFirestore.getInstance().collection("shifts")
+                                                            .document(shift.id).delete()
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = "Удалить",
+                                                        tint = Color(0xFFE57373),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
                                         }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    val statusText = if (shift.status == ShiftStatus.OPENED) "Открыта" else "Закреплена"
+                                    val statusColor = if (shift.status == ShiftStatus.OPENED) Color(0xFFFFB74D) else Color(0xFF81C784)
+
+                                    Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF3E2723)) {
+                                        Text(statusText, color = statusColor, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp)
                                     }
 
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text("Дата: ${shift.date}", color = Color.White, fontSize = 14.sp)
                                     Text("Время: ${shift.time}", color = Color.White, fontSize = 14.sp)
                                     Text("Точка: ${shift.location}", color = Color.White, fontSize = 14.sp)
-                                    Text("Инициатор: ${shift.authorName}", color = Color.Gray, fontSize = 14.sp)
+
+                                    // === ИСПРАВЛЕНО: показываем инициатора ===
+                                    Text(
+                                        text = "Инициатор: ${if (shift.authorName.isNotEmpty()) shift.authorName else "Неизвестный"}",
+                                        color = Color.Gray,
+                                        fontSize = 14.sp
+                                    )
 
                                     if (shift.baristaWhoResponded != null) {
-                                        Text("Откликнулся: ${shift.baristaWhoResponded}", color = Color(0xFFFFF176), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            text = "Откликнулся: ${shift.baristaWhoResponded}",
+                                            color = Color(0xFFFFF176),
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(shift.comment, color = Color(0xFFE0E0E0), fontSize = 14.sp)
+                                    if (shift.comment.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(" ${shift.comment}", color = Color(0xFFE0E0E0), fontSize = 14.sp)
+                                    }
 
                                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -218,41 +314,16 @@ fun WorkspaceScreen(
                                             }
                                         }
 
-                                        isAdminMode && shift.status == ShiftStatus.AWAITING_CONFIRMATION -> {
+                                        shift.status == ShiftStatus.OPENED && shift.authorId != currentUserId -> {
                                             Button(
                                                 onClick = {
-                                                    val index = shiftList.indexOf(shift)
-                                                    if (index != -1) {
-                                                        val updatedShift = shift.copy(status = ShiftStatus.CONFIRMED)
-                                                        shiftList[index] = updatedShift
-
-                                                        // 👈 ДОБАВЛЕНО: Обновление статуса в Firebase
-                                                        FirebaseFirestore.getInstance().collection("shifts")
-                                                            .document(shift.id).set(updatedShift)
-                                                    }
-                                                },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
-                                            ) {
-                                                Text("Принять отклик (Подтвердить)", color = Color.White)
-                                            }
-                                        }
-
-                                        !isAdminMode && shift.status == ShiftStatus.OPENED -> {
-                                            Button(
-                                                onClick = {
-                                                    val index = shiftList.indexOf(shift)
-                                                    if (index != -1) {
-                                                        val updatedShift = shift.copy(
-                                                            status = ShiftStatus.AWAITING_CONFIRMATION,
-                                                            baristaWhoResponded = currentUserName // 👈 Вместо Ивана Соколова подставляется никнейм
-                                                        )
-                                                        shiftList[index] = updatedShift
-
-                                                        // 👈 ДОБАВЛЕНО: Обновление отклика в Firebase
-                                                        FirebaseFirestore.getInstance().collection("shifts")
-                                                            .document(shift.id).set(updatedShift)
-                                                    }
+                                                    val updatedShift = shift.copy(
+                                                        status = ShiftStatus.CONFIRMED,
+                                                        baristaWhoResponded = realUserName,
+                                                        baristaWhoRespondedId = currentUserId
+                                                    )
+                                                    FirebaseFirestore.getInstance().collection("shifts")
+                                                        .document(shift.id).set(updatedShift)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5D4037))
@@ -261,8 +332,20 @@ fun WorkspaceScreen(
                                             }
                                         }
 
-                                        shift.status == ShiftStatus.AWAITING_CONFIRMATION -> {
-                                            Text("Ожидайте подтверждения управляющего кофейни", color = Color.Gray, fontSize = 13.sp)
+                                        shift.status == ShiftStatus.OPENED && shift.authorId == currentUserId -> {
+                                            Surface(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color(0xFF4A148C).copy(alpha = 0.5f)
+                                            ) {
+                                                Text(
+                                                    text = "Это ваша смена. Ожидайте отклика другого сотрудника.",
+                                                    color = Color.White.copy(alpha = 0.7f),
+                                                    modifier = Modifier.padding(8.dp),
+                                                    fontSize = 13.sp,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -274,7 +357,7 @@ fun WorkspaceScreen(
         }
     }
 
-    // Диалог создания новой смены пользователем
+    // Диалог создания новой смены
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
@@ -282,36 +365,82 @@ fun WorkspaceScreen(
             title = { Text("Новая замена", color = Color.White) },
             text = {
                 Column {
-                    TextField(value = dateInput, onValueChange = { dateInput = it }, placeholder = { Text("Дата") })
+                    OutlinedTextField(
+                        value = dateInput,
+                        onValueChange = { dateInput = it },
+                        placeholder = { Text("Дата", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
-                    TextField(value = timeInput, onValueChange = { timeInput = it }, placeholder = { Text("Время") })
+                    OutlinedTextField(
+                        value = timeInput,
+                        onValueChange = { timeInput = it },
+                        placeholder = { Text("Время", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
-                    TextField(value = locationInput, onValueChange = { locationInput = it }, placeholder = { Text("Адрес кофейни") })
+                    OutlinedTextField(
+                        value = locationInput,
+                        onValueChange = { locationInput = it },
+                        placeholder = { Text("Адрес кофейни", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
-                    TextField(value = commentInput, onValueChange = { commentInput = it }, placeholder = { Text("Комментарий...") })
+                    OutlinedTextField(
+                        value = commentInput,
+                        onValueChange = { commentInput = it },
+                        placeholder = { Text("Комментарий...", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2
+                    )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         if (dateInput.isNotBlank() && timeInput.isNotBlank()) {
-                            // 👈 ДОБАВЛЕНО: Создаем ссылку на новый документ для получения уникального ID из Firebase
                             val db = FirebaseFirestore.getInstance()
                             val newDocRef = db.collection("shifts").document()
 
                             val newShift = InteractiveShift(
-                                id = newDocRef.id, // 👈 Передаем уникальный ID документа из Firebase
+                                id = newDocRef.id,
                                 date = dateInput,
                                 time = timeInput,
                                 location = locationInput.ifBlank { "Surf Coffee" },
-                                authorName = if (isAdminMode) "Управляющий" else currentUserName, // 👈 Инициатором теперь тоже пишется никнейм создателя
+                                authorName = realUserName,  // ← используем реальный никнейм
+                                authorId = currentUserId,   // ← сохраняем ID автора
                                 comment = commentInput,
                                 status = ShiftStatus.OPENED
                             )
 
-                            shiftList.add(newShift)
-
-                            // 👈 ДОБАВЛЕНО: Отправляем объект смены в Firebase
                             newDocRef.set(newShift)
 
                             dateInput = ""
@@ -328,6 +457,101 @@ fun WorkspaceScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showCreateDialog = false }) {
+                    Text("Отмена", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // Диалог редактирования
+    if (editingShift != null) {
+        AlertDialog(
+            onDismissRequest = { editingShift = null },
+            containerColor = Color(0xFF1E1E1E),
+            title = { Text("Редактировать запрос", color = Color.White) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editDate,
+                        onValueChange = { editDate = it },
+                        placeholder = { Text("Дата", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editTime,
+                        onValueChange = { editTime = it },
+                        placeholder = { Text("Время", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editLocation,
+                        onValueChange = { editLocation = it },
+                        placeholder = { Text("Адрес кофейни", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editComment,
+                        onValueChange = { editComment = it },
+                        placeholder = { Text("Комментарий...", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD700),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFFFFD700)
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editingShift != null && editDate.isNotBlank() && editTime.isNotBlank()) {
+                            val updatedShift = editingShift!!.copy(
+                                date = editDate,
+                                time = editTime,
+                                location = editLocation,
+                                comment = editComment
+                            )
+                            FirebaseFirestore.getInstance().collection("shifts")
+                                .document(editingShift!!.id)
+                                .set(updatedShift)
+                            editingShift = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
+                ) {
+                    Text("Сохранить", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingShift = null }) {
                     Text("Отмена", color = Color.Gray)
                 }
             }

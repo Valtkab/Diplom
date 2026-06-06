@@ -46,23 +46,6 @@ import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
 import com.google.firebase.firestore.FirebaseFirestore
 
-fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
-    return try {
-        val inputStream = context.contentResolver.openInputStream(uri)
-        val fileName = "chat_img_${System.currentTimeMillis()}.jpg"
-        val outputFile = File(context.filesDir, fileName)
-
-        inputStream?.use { input ->
-            FileOutputStream(outputFile).use { output ->
-                input.copyTo(output)
-            }
-        }
-        Uri.fromFile(outputFile)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        uri
-    }
-}
 
 fun createImageFileUri(context: Context): Uri {
     val imageFolder = File(context.cacheDir, "camera_images")
@@ -241,9 +224,9 @@ fun ChatScreen(
                                 )
                             ){
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    if (message.text.contains("📸описание:")) {
-                                        val textPart = message.text.substringBefore("📸описание:").trim()
-                                        val uriString = message.text.substringAfter("📸описание:").trim()
+                                    if (message.text.contains("описание:")) {
+                                        val textPart = message.text.substringBefore("описание:").trim()
+                                        val uriString = message.text.substringAfter("описание:").trim()
 
                                         AsyncImage(
                                             model = uriString,
@@ -372,7 +355,7 @@ fun ChatScreen(
                                     override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
                                     override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
                                         val imageUrl = resultData?.get("secure_url").toString()
-                                        val messageText = "$inputText 📸описание:$imageUrl"
+                                        val messageText = "$inputText описание:$imageUrl"
                                         viewModel.sendMessage(chatId, messageText)
                                         inputText = ""
                                         selectedImageUri = null
@@ -431,8 +414,8 @@ fun ChatScreen(
                                 val msg = selectedMessageForAction
                                 if (msg != null) {
                                     // Для фото-сообщений берём только текстовую часть
-                                    if (msg.text.contains("📸описание:")) {
-                                        editText = msg.text.substringBefore("📸описание:").trim()
+                                    if (msg.text.contains("описание:")) {
+                                        editText = msg.text.substringBefore("описание:").trim()
                                     } else {
                                         editText = msg.text
                                     }
@@ -444,7 +427,7 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("✏️ Редактировать", color = Color.Black, fontWeight = FontWeight.Medium)
+                            Text("Редактировать", color = Color.Black, fontWeight = FontWeight.Medium)
                         }
 
                         // Кнопка "Удалить"
@@ -460,7 +443,7 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("🗑️ Удалить сообщение", color = Color.White)
+                            Text("Удалить сообщение", color = Color.White)
                         }
                     }
                 },
@@ -534,9 +517,9 @@ fun ChatScreen(
                                 val originalMessage = editingMessage!!
                                 var newText = tempEditText
 
-                                if (originalMessage.text.contains("📸описание:")) {
-                                    val uriString = originalMessage.text.substringAfter("📸описание:")
-                                    newText = "$tempEditText 📸описание:$uriString"
+                                if (originalMessage.text.contains("описание:")) {
+                                    val uriString = originalMessage.text.substringAfter("описание:")
+                                    newText = "$tempEditText описание:$uriString"
                                 }
 
                                 viewModel.editMessage(

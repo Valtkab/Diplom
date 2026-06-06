@@ -19,9 +19,7 @@ class MessageRepositoryImpl(
 
     private val firestore = FirebaseFirestore.getInstance()
 
-    // ==========================================
-    // НАСТРОЙКА РАБОТЫ С СООБЩЕНИЯМИ (MESSAGES)
-    // ==========================================
+
 
     override fun getMessages(chatId: String): Flow<List<Message>> = callbackFlow {
         val listener = firestore.collection("chats")
@@ -79,9 +77,7 @@ class MessageRepositoryImpl(
         }
     }
 
-    // ==========================================
-    // НАСТРОЙКА РАБОТЫ С ЧАТАМИ (CHATS)
-    // ==========================================
+
 
     override fun getChats(): Flow<List<Chat>> = callbackFlow {
 

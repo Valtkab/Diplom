@@ -50,7 +50,7 @@ fun RegisterScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Регистрация бариста 📋",
+                text = "Регистрация бариста",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF4E342E)

@@ -203,7 +203,7 @@ fun ProfileScreen(
                                 .border(2.dp, Color.Black, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("☕", fontSize = 10.sp)
+                            Text(" ", fontSize = 10.sp)
                         }
                     }
 
