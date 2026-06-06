@@ -45,7 +45,7 @@ fun UserPickerDialog(
                             .padding(12.dp)
                     ) {
 
-                        Text(user.name)
+                        Text("${user.firstName} ${user.lastName}".trim())
 
                         Text(user.role)
                     }

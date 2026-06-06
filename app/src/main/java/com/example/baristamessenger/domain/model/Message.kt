@@ -11,5 +11,8 @@ data class Message(
     val text: String = "",
     val timestamp: Long = 0L,
     val isRecipe: Boolean = false,
+    val senderNickname: String = "",
+    val isEdited: Boolean = false,  // ← ДОБАВИТЬ: был ли отредактирован
+    val editTimestamp: Long = 0L,
     val reactions: Map<String, Int> = emptyMap()
 )

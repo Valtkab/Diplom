@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.baristamessenger.domain.model.User
 import com.example.baristamessenger.domain.repository.MessageRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,81 +16,139 @@ class ProfileViewModel(
 ) : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
 
     private val _userProfile = MutableStateFlow<User?>(null)
     val userProfile: StateFlow<User?> = _userProfile.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
 
     init {
         loadUserProfile()
     }
 
-    private fun loadUserProfile() {
+    fun loadUserProfile() {
         val uid = auth.currentUser?.uid
-
         if (uid == null) {
-            _userProfile.value = User(id = "", name = "Ошибка сессии", imageUrl = "", role = "", coffeeShop = "Не вошел")
+            _userProfile.value = User(id = "", firstName = "Ошибка", lastName = "", nickname = "")
+            _isLoading.value = false
             return
         }
 
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-
+        _isLoading.value = true
         db.collection("users").document(uid).get()
             .addOnSuccessListener { document ->
-                if (document != null && document.exists()) {
-                    try {
-                        // Достаем имя и фамилию (пробуем разные варианты полей, которые могли записаться при регистрации)
-                        val fName = document.getString("firstName") ?: document.getString("name") ?: "Бариста"
-                        val lName = document.getString("lastName") ?: ""
-                        val fullName = if (lName.isNotEmpty()) "$fName $lName" else fName
-
-                        // Достаем никнейм (проверяем поля nickname или coffeeShop)
-                        val nick = document.getString("nickname") ?: document.getString("coffeeShop") ?: "@barista"
-                        val roleName = document.getString("role") ?: "Бариста"
-
-                        // Собираем объект User вручную БЕЗ toObject(), чтобы приложение НЕ ВЫЛЕТАЛО
-                        _userProfile.value = User(
-                            id = uid,
-                            name = fullName,
-                            imageUrl = "",
-                            role = roleName,
-                            coffeeShop = nick
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        // Если внутри блока try что-то пошло не так, приложение не упадет, а покажет заглушку
-                        _userProfile.value = User(
-                            id = uid,
-                            name = "Ошибка структуры данных",
-                            imageUrl = "",
-                            role = "Бариста",
-                            coffeeShop = "@error"
-                        )
-                    }
-                } else {
-                    // Если документа в Firestore вообще нет
-                    _userProfile.value = User(
+                if (document.exists()) {
+                    val user = User(
                         id = uid,
-                        name = auth.currentUser?.email ?: "Новый Бариста",
-                        imageUrl = "",
-                        role = "Бариста",
-                        coffeeShop = "@nickname"
+                        firstName = document.getString("firstName") ?: "",
+                        lastName = document.getString("lastName") ?: "",
+                        nickname = document.getString("nickname") ?: "",
+                        birthDate = document.getString("birthDate") ?: "",
+                        aboutMe = document.getString("aboutMe") ?: "",
+                        imageUrl = document.getString("imageUrl") ?: "",
+                        role = document.getString("role") ?: "Бариста",
+                        coffeeShop = document.getString("coffeeShop") ?: ""
                     )
+                    _userProfile.value = user
+                } else {
+                    // Новый пользователь — создаём пустую запись в Firestore
+                    val newUser = User(id = uid)
+                    _userProfile.value = newUser
+                    // Создаём документ в Firestore с пустыми полями
+                    saveNewUserToFirestore(newUser)
                 }
+                _isLoading.value = false
             }
-            .addOnFailureListener { exception ->
-                exception.printStackTrace()
-                _userProfile.value = User(
+            .addOnFailureListener { e ->
+                _error.value = e.message ?: "Ошибка загрузки"
+                _isLoading.value = false
+            }
+    }
+
+    private fun saveNewUserToFirestore(user: User) {
+        val userMap = hashMapOf(
+            "firstName" to user.firstName,
+            "lastName" to user.lastName,
+            "nickname" to user.nickname,
+            "birthDate" to user.birthDate,
+            "aboutMe" to user.aboutMe,
+            "imageUrl" to user.imageUrl,
+            "role" to user.role,
+            "coffeeShop" to user.coffeeShop
+        )
+        db.collection("users").document(user.id).set(userMap)
+            .addOnFailureListener { e ->
+                _error.value = "Не удалось создать профиль: ${e.message}"
+            }
+    }
+
+    fun saveUserProfile(
+        firstName: String,
+        lastName: String,
+        nickname: String,
+        birthDate: String,
+        aboutMe: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            _error.value = "Пользователь не авторизован"
+            return
+        }
+
+        _isSaving.value = true
+        _error.value = null
+
+        val updates = hashMapOf<String, Any>(
+            "firstName" to firstName,
+            "lastName" to lastName,
+            "nickname" to nickname,
+            "birthDate" to birthDate,
+            "aboutMe" to aboutMe
+        )
+
+        db.collection("users").document(uid)
+            .update(updates)
+            .addOnSuccessListener {
+                // Обновляем локальный StateFlow
+                val currentUser = _userProfile.value
+                _userProfile.value = currentUser?.copy(
+                    firstName = firstName,
+                    lastName = lastName,
+                    nickname = nickname,
+                    birthDate = birthDate,
+                    aboutMe = aboutMe
+                ) ?: User(
                     id = uid,
-                    name = "Ошибка сети",
-                    imageUrl = "",
-                    role = "Проверьте интернет",
-                    coffeeShop = ""
+                    firstName = firstName,
+                    lastName = lastName,
+                    nickname = nickname,
+                    birthDate = birthDate,
+                    aboutMe = aboutMe
                 )
+                _isSaving.value = false
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                _error.value = e.message ?: "Ошибка сохранения"
+                _isSaving.value = false
             }
     }
 
     fun logout(onLogoutSuccess: () -> Unit) {
         auth.signOut()
         onLogoutSuccess()
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 }

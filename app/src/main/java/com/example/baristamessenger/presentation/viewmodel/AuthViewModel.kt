@@ -67,7 +67,9 @@ class AuthViewModel(
                 // Создаем полноценный профиль на основе твоей модели User
                 val newUser = User(
                     id = uid,
-                    name = "$firstName $lastName", // Склеиваем Имя и Фамилию в одно поле name
+                    firstName = firstName,  // или раздели имя и фамилию
+                    lastName = lastName,
+                    nickname = nickname,
                     imageUrl = "", // Заглушка для аватара
                     role = "Бариста", // Базовая роль для новичка
                     coffeeShop = nickname // Временно сохраняем никнейм в это поле (или в будущем расширишь модель)

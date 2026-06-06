@@ -147,7 +147,7 @@ fun ChatsListScreen(
                 onUserSelected = { user ->
                     viewModel.createPrivateChat(
                         user.id,
-                        user.name
+                        "${user.firstName} ${user.lastName}".trim()
                     )
                     showUserPicker = false
                 }

@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -19,12 +19,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.baristamessenger.presentation.Screen
-
+import com.example.baristamessenger.presentation.viewmodel.ProfileViewModel
+import org.koin.androidx.compose.koinViewModel
 
 // Вспомогательный класс для вкладок нижней панели
 sealed class BottomBarItem(val route: String, val title: String, val icon: ImageVector) {
-    object Chats : BottomBarItem("chats_list", "Чаты", Icons.Default.Send)
-    object Exchange : BottomBarItem("workspace", "Биржа", Icons.Default.List)
+    object Chats : BottomBarItem("chats_list", "Чаты", Icons.AutoMirrored.Filled.Send)  // ← изменил
+    object Exchange : BottomBarItem("workspace", "Биржа", Icons.AutoMirrored.Filled.List)
     object Calculator : BottomBarItem("calculator", "Калькулятор", Icons.Default.Clear)
     object Profile : BottomBarItem("profile", "Профиль", Icons.Default.Person)
 }
@@ -33,12 +34,15 @@ sealed class BottomBarItem(val route: String, val title: String, val icon: Image
 fun MainFlowScreen(
     navController: NavController,
     currentUserId: String,
-    currentUserName: String, // 👈 ИСПРАВЛЕНО: Лишний параметр avController удален
+    currentUserName: String,
     onLogout: () -> Unit = {}
 ) {
     val bottomNavController = rememberNavController()
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Получаем ProfileViewModel через Koin
+    val profileViewModel: ProfileViewModel = koinViewModel()
 
     val items = listOf(
         BottomBarItem.Chats,
@@ -106,7 +110,7 @@ fun MainFlowScreen(
             composable(BottomBarItem.Exchange.route) {
                 WorkspaceScreen(
                     onBackClick = { navController.popBackStack() },
-                    currentUserName = currentUserName // Передаем никнейм дальше в WorkspaceScreen
+                    currentUserName = currentUserName
                 )
             }
 
@@ -115,9 +119,10 @@ fun MainFlowScreen(
                 CostCalculatorScreen(onBackClick = { bottomNavController.popBackStack() })
             }
 
-            // 4. ЭКРАН ПРОФИЛЯ
+            // 4. ЭКРАН ПРОФИЛЯ - ПЕРЕДАЁМ ViewModel
             composable(BottomBarItem.Profile.route) {
                 ProfileScreen(
+                    viewModel = profileViewModel,  // ← ПЕРЕДАЁМ ViewModel
                     onBackClick = { bottomNavController.popBackStack() },
                     onLogout = onLogout
                 )

@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -12,12 +13,12 @@ import androidx.navigation.navArgument
 import com.example.baristamessenger.presentation.Screen
 import com.example.baristamessenger.presentation.screens.*
 import com.example.baristamessenger.presentation.viewmodel.AuthViewModel
+import com.example.baristamessenger.presentation.viewmodel.ProfileViewModel
 import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 import androidx.core.view.WindowCompat
 import com.example.baristamessenger.data.CloudinaryManager
-
-
+import org.koin.compose.koinInject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,7 +53,6 @@ fun BaristaAppNavigation() {
         navController = navController,
         startDestination = startScreen
     ) {
-        // Экран логина
         // Экран логина
         composable(Screen.Login.route) {
             LoginScreen(
@@ -99,8 +99,25 @@ fun BaristaAppNavigation() {
         composable("main_flow") {
             MainFlowScreen(
                 currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
-                navController = navController, // Передаем ровно navController
-                currentUserName = userName,    // Передаем имя пользователя в поток
+                navController = navController,
+                currentUserName = userName,
+                onLogout = {
+                    FirebaseAuth.getInstance().signOut()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo("main_flow") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // Экран профиля (открывается отдельно, без нижней панели)
+        composable(Screen.Profile.route) {
+            // Получаем ProfileViewModel через Koin
+            val profileViewModel: ProfileViewModel = koinViewModel()
+
+            ProfileScreen(
+                viewModel = profileViewModel,
+                onBackClick = { navController.popBackStack() },
                 onLogout = {
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate(Screen.Login.route) {
@@ -120,4 +137,5 @@ fun BaristaAppNavigation() {
             WorkspaceScreen(onBackClick = { navController.popBackStack() })
         }
     }
+
 }

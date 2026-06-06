@@ -44,6 +44,7 @@ import java.io.FileOutputStream
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
+import com.google.firebase.firestore.FirebaseFirestore
 
 fun copyUriToInternalStorage(context: Context, uri: Uri): Uri {
     return try {
@@ -87,6 +88,7 @@ fun ChatScreen(
     val context = LocalContext.current
     LaunchedEffect(chatId) {
         viewModel.loadMessages(chatId)
+        viewModel.migrateOldMessages()
     }
 
     val messages by viewModel.messages.collectAsState()
@@ -95,6 +97,19 @@ fun ChatScreen(
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
     var enlargedImageUri by remember { mutableStateOf<String?>(null) }
     var showChooserDialog by remember { mutableStateOf(false) }
+
+    // Определяем, групповой ли чат
+    var isGroupChat by remember { mutableStateOf(false) }
+
+    LaunchedEffect(chatId) {
+        val db = FirebaseFirestore.getInstance()
+        db.collection("chats").document(chatId).get()
+            .addOnSuccessListener { doc ->
+                val participants = doc.get("participants") as? List<*> ?: emptyList<Any>()
+                // Если участников больше 2 — это групповой чат
+                isGroupChat = participants.size > 2 || doc.getBoolean("isGroup") == true
+            }
+    }
 
     var selectedMessageForAction by remember {
         mutableStateOf<com.example.baristamessenger.domain.model.Message?>(null)
@@ -191,12 +206,13 @@ fun ChatScreen(
                                 if (isCurrentUser) Alignment.End
                                 else Alignment.Start
                         ) {
-
-                            if (!isCurrentUser) {
+                            // === ИСПРАВЛЕНО: показываем никнейм для групповых чатов и чужих сообщений ===
+                            if (isGroupChat && !isCurrentUser) {
                                 Text(
-                                    text = message.senderName.ifEmpty { "Бариста" },
+                                    text = message.senderNickname.ifEmpty { "Бариста" },
                                     fontSize = 12.sp,
-                                    color = Color.Gray,
+                                    color = Color(0xFFFFD700),  // Золотой цвет для никнеймов
+                                    fontWeight = FontWeight.Medium,
                                     modifier = Modifier.padding(
                                         start = 4.dp,
                                         bottom = 2.dp
@@ -340,7 +356,6 @@ fun ChatScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // ИСПРАВЛЕНО: Убрали блок ТТК. Кнопка отправки теперь постоянная.
                 val isSendEnabled = inputText.isNotBlank() || selectedImageUri != null
 
                 Button(
@@ -348,63 +363,33 @@ fun ChatScreen(
                         val imageUri = selectedImageUri
 
                         if (imageUri != null) {
-
                             MediaManager.get()
                                 .upload(imageUri)
                                 .callback(object : UploadCallback {
-
                                     override fun onStart(requestId: String?) {}
-
-                                    override fun onProgress(
-                                        requestId: String?,
-                                        bytes: Long,
-                                        totalBytes: Long
-                                    ) {}
-
-                                    override fun onSuccess(
-                                        requestId: String?,
-                                        resultData: MutableMap<Any?, Any?>?
-                                    ) {
-
-                                        val imageUrl =
-                                            resultData?.get("secure_url").toString()
-
-                                        val messageText =
-                                            "$inputText 📸описание:$imageUrl"
-
+                                    override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
+                                    override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
+                                        val imageUrl = resultData?.get("secure_url").toString()
+                                        val messageText = "$inputText 📸описание:$imageUrl"
                                         viewModel.sendMessage(chatId, messageText)
-
                                         inputText = ""
                                         selectedImageUri = null
                                     }
-
-                                    override fun onError(
-                                        requestId: String?,
-                                        error: ErrorInfo?
-                                    ) {
-                                        error?.description?.let {
-                                            println(it)
-                                        }
+                                    override fun onError(requestId: String?, error: ErrorInfo?) {
+                                        error?.description?.let { println(it) }
                                     }
-
-                                    override fun onReschedule(
-                                        requestId: String?,
-                                        error: ErrorInfo?
-                                    ) {}
+                                    override fun onReschedule(requestId: String?, error: ErrorInfo?) {}
                                 })
                                 .dispatch()
-
                         } else {
-
                             viewModel.sendMessage(chatId, inputText)
-
                             inputText = ""
                         }
                     },
                     enabled = isSendEnabled,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFFD700), // Яркий золотой при активации
-                        disabledContainerColor = Color(0xFFFFD700).copy(alpha = 0.3f) // Полупрозрачный, если пусто
+                        containerColor = Color(0xFFFFD700),
+                        disabledContainerColor = Color(0xFFFFD700).copy(alpha = 0.3f)
                     ),
                     shape = RoundedCornerShape(50),
                     contentPadding = PaddingValues(0.dp),

@@ -24,39 +24,56 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.baristamessenger.presentation.viewmodel.ProfileViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
+    viewModel: ProfileViewModel,
     onBackClick: () -> Unit,
-    onLogout: () -> Unit,
-    initialName: String = "",
-    initialUsername: String = "",
-    initialBirthDate: String = "",
-    initialAboutMe: String = "",
-    onSaveProfile: (name: String, username: String, birthDate: String, aboutMe: String) -> Unit = { _, _, _, _ -> }
+    onLogout: () -> Unit
 ) {
-    var isEditing by rememberSaveable { mutableStateOf(initialName.isEmpty()) }
+    val userProfile by viewModel.userProfile.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val isSaving by viewModel.isSaving.collectAsState()
+    val error by viewModel.error.collectAsState()
 
-    var name by rememberSaveable(initialName) { mutableStateOf(initialName) }
-    var username by rememberSaveable(initialUsername) { mutableStateOf(initialUsername) }
-    var birthDate by rememberSaveable(initialBirthDate) { mutableStateOf(initialBirthDate) }
-    var aboutMe by rememberSaveable(initialAboutMe) { mutableStateOf(initialAboutMe) }
+    var isEditing by rememberSaveable { mutableStateOf(false) }
 
-    var showMenu by remember { mutableStateOf(false) }
+    // Локальные состояния для редактирования
+    var firstName by rememberSaveable { mutableStateOf("") }
+    var lastName by rememberSaveable { mutableStateOf("") }
+    var nickname by rememberSaveable { mutableStateOf("") }
+    var birthDate by rememberSaveable { mutableStateOf("") }
+    var aboutMe by rememberSaveable { mutableStateOf("") }
 
-    val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = Color(0xFFE65100),
-        unfocusedBorderColor = Color(0xFF262626),
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedContainerColor = Color(0xFF161616),
-        unfocusedContainerColor = Color(0xFF161616),
-        focusedLabelColor = Color(0xFFE65100),
-        unfocusedLabelColor = Color.Gray
-    )
+    // Загружаем данные из ViewModel в локальные переменные
+    LaunchedEffect(userProfile) {
+        userProfile?.let {
+            firstName = it.firstName
+            lastName = it.lastName
+            nickname = it.nickname
+            birthDate = it.birthDate
+            aboutMe = it.aboutMe
+        }
+    }
+
+    // Snackbar для ошибок
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(error) {
+        error?.let {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(it)
+                viewModel.clearError()
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -77,19 +94,41 @@ fun ProfileScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        if (isEditing) {
-                            onSaveProfile(name, username, birthDate, aboutMe)
+                    // Кнопка Сохранить / Редактировать
+                    IconButton(
+                        enabled = !isSaving,
+                        onClick = {
+                            if (isEditing) {
+                                viewModel.saveUserProfile(
+                                    firstName = firstName,
+                                    lastName = lastName,
+                                    nickname = nickname,
+                                    birthDate = birthDate,
+                                    aboutMe = aboutMe
+                                ) {
+                                    isEditing = false
+                                }
+                            } else {
+                                isEditing = true
+                            }
                         }
-                        isEditing = !isEditing
-                    }) {
-                        Icon(
-                            imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Settings,
-                            contentDescription = if (isEditing) "Сохранить" else "Редактировать",
-                            tint = if (isEditing) Color(0xFF4CAF50) else Color.Gray
-                        )
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.White
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Settings,
+                                contentDescription = if (isEditing) "Сохранить" else "Редактировать",
+                                tint = if (isEditing) Color(0xFF4CAF50) else Color.Gray
+                            )
+                        }
                     }
 
+                    // Меню с выходом
+                    var showMenu by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { showMenu = true }) {
                             Icon(
@@ -107,7 +146,7 @@ fun ProfileScreen(
                                 text = { Text("Выйти из аккаунта", color = Color.Red) },
                                 onClick = {
                                     showMenu = false
-                                    onLogout()
+                                    viewModel.logout { onLogout() }
                                 }
                             )
                         }
@@ -120,148 +159,171 @@ fun ProfileScreen(
         },
         containerColor = Color.Black
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // --- БЛОК АВАТАРА И ИМЕНИ ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
             ) {
-                Box(modifier = Modifier.size(86.dp)) {
-                    AsyncImage(
-                        model = "https://placeholder.com/user_avatar.jpg",
-                        contentDescription = "Аватар профиля",
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF2C2C2C)),
-                        contentScale = ContentScale.Crop
+                CircularProgressIndicator(color = Color(0xFFE65100))
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- БЛОК АВАТАРА И ИМЕНИ ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.size(86.dp)) {
+                        AsyncImage(
+                            model = userProfile?.imageUrl?.ifEmpty { "https://placeholder.com/user_avatar.jpg" }
+                                ?: "https://placeholder.com/user_avatar.jpg",
+                            contentDescription = "Аватар профиля",
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2C2C2C)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .align(Alignment.BottomEnd)
+                                .clip(CircleShape)
+                                .background(Color(0xFFE65100))
+                                .border(2.dp, Color.Black, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("☕", fontSize = 10.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(20.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (isEditing) {
+                            OutlinedTextField(
+                                value = firstName,
+                                onValueChange = { firstName = it },
+                                label = { Text("Имя") },
+                                placeholder = { Text("Введите имя", color = Color.DarkGray) },
+                                colors = textFieldColors(),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = lastName,
+                                onValueChange = { lastName = it },
+                                label = { Text("Фамилия") },
+                                placeholder = { Text("Введите фамилию", color = Color.DarkGray) },
+                                colors = textFieldColors(),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Text(
+                                text = if (firstName.isNotEmpty() || lastName.isNotEmpty())
+                                    "$firstName $lastName".trim()
+                                else "Имя не указано",
+                                color = if (firstName.isEmpty() && lastName.isEmpty()) Color.Gray else Color.White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // --- РАЗДЕЛ: ЛИЧНЫЕ ДАННЫЕ (НИК И ДР) ---
+                if (isEditing) {
+                    OutlinedTextField(
+                        value = nickname,
+                        onValueChange = { nickname = it },
+                        label = { Text("Имя пользователя (никнейм)") },
+                        placeholder = { Text("@username", color = Color.DarkGray) },
+                        colors = textFieldColors(),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = birthDate,
+                        onValueChange = { birthDate = it },
+                        label = { Text("Дата рождения") },
+                        placeholder = { Text("Например: 02 дек. 2005", color = Color.DarkGray) },
+                        colors = textFieldColors(),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    Text(
+                        text = "Личные данные",
+                        color = Color.Gray,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF161616), shape = RoundedCornerShape(16.dp))
+                            .border(1.dp, Color(0xFF262626), shape = RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        InfoRow(label = "Имя пользователя", value = nickname.ifEmpty { "Не указано" })
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF262626)))
+                        InfoRow(label = "Дата рождения", value = birthDate.ifEmpty { "Не указана" })
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // --- РАЗДЕЛ: О СЕБЕ ---
+                Text(
+                    text = "О себе",
+                    color = if (isEditing) Color.Gray else Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (isEditing) {
+                    OutlinedTextField(
+                        value = aboutMe,
+                        onValueChange = { aboutMe = it },
+                        placeholder = { Text("Расскажите немного о себе...", color = Color.DarkGray) },
+                        colors = textFieldColors(),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3
+                    )
+                } else {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
-                            .align(Alignment.BottomEnd)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE65100))
-                            .border(2.dp, Color.Black, CircleShape),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .background(Color(0xFF161616), shape = RoundedCornerShape(16.dp))
+                            .border(1.dp, Color(0xFF262626), shape = RoundedCornerShape(16.dp))
+                            .padding(16.dp)
                     ) {
-                        Text("☕", fontSize = 10.sp)
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(20.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    if (isEditing) {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Имя и Фамилия") },
-                            placeholder = { Text("Введите имя", color = Color.DarkGray) },
-                            colors = textFieldColors,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
                         Text(
-                            text = name.ifEmpty { "Имя не указано" },
-                            color = if (name.isEmpty()) Color.Gray else Color.White,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold
+                            text = aboutMe.ifEmpty { "Здесь пока ничего нет. Нажмите на шестеренку, чтобы добавить описание!" },
+                            color = if (aboutMe.isEmpty()) Color.Gray else Color(0xFFE0E0E0),
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp
                         )
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // --- РАЗДЕЛ: ЛИЧНЫЕ ДАННЫЕ (НИК И ДР) ---
-            if (isEditing) {
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text("Имя пользователя (никнейм)") },
-                    placeholder = { Text("@username", color = Color.DarkGray) },
-                    colors = textFieldColors,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = birthDate,
-                    onValueChange = { birthDate = it },
-                    label = { Text("Дата рождения") },
-                    placeholder = { Text("Например: 02 дек. 2005", color = Color.DarkGray) },
-                    colors = textFieldColors,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                Text(
-                    text = "Личные данные",
-                    color = Color.Gray,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF161616), shape = RoundedCornerShape(16.dp))
-                        .border(1.dp, Color(0xFF262626), shape = RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    InfoRow(label = "Имя пользователя", value = username.ifEmpty { "Не указано" })
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF262626)))
-                    InfoRow(label = "Дата рождения", value = birthDate.ifEmpty { "Не указана" })
-                }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // --- РАЗДЕЛ: О СЕБЕ ---
-            Text(
-                text = "О себе",
-                color = if (isEditing) Color.Gray else Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (isEditing) {
-                OutlinedTextField(
-                    value = aboutMe,
-                    onValueChange = { aboutMe = it },
-                    placeholder = { Text("Расскажите немного о себе...", color = Color.DarkGray) },
-                    colors = textFieldColors,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF161616), shape = RoundedCornerShape(16.dp))
-                        .border(1.dp, Color(0xFF262626), shape = RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        // ИСПРАВЛЕНО: Убрана ошибочная запись Color.Color(...)
-                        text = aboutMe.ifEmpty { "Здесь пока ничего нет. Нажмите на шестеренку, чтобы добавить описание!" },
-                        color = if (aboutMe.isEmpty()) Color.Gray else Color(0xFFE0E0E0),
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp
-                    )
                 }
             }
         }
@@ -285,3 +347,15 @@ fun InfoRow(label: String, value: String) {
         )
     }
 }
+
+@Composable
+private fun textFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = Color(0xFFE65100),
+    unfocusedBorderColor = Color(0xFF262626),
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    focusedContainerColor = Color(0xFF161616),
+    unfocusedContainerColor = Color(0xFF161616),
+    focusedLabelColor = Color(0xFFE65100),
+    unfocusedLabelColor = Color.Gray
+)
