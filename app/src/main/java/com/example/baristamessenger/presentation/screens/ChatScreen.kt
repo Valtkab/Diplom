@@ -97,6 +97,8 @@ fun ChatScreen(
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
     var enlargedImageUri by remember { mutableStateOf<String?>(null) }
     var showChooserDialog by remember { mutableStateOf(false) }
+    var editingMessage by remember { mutableStateOf<com.example.baristamessenger.domain.model.Message?>(null) }
+    var editText by remember { mutableStateOf("") }
 
     // Определяем, групповой ли чат
     var isGroupChat by remember { mutableStateOf(false) }
@@ -405,14 +407,47 @@ fun ChatScreen(
             }
         }
 
-        // ДИАЛОГ УДАЛЕНИЯ СООБЩЕНИЯ
+        // ДИАЛОГ ВЫБОРА ДЕЙСТВИЯ (РЕДАКТИРОВАТЬ / УДАЛИТЬ)
         if (selectedMessageForAction != null) {
             AlertDialog(
                 onDismissRequest = { selectedMessageForAction = null },
                 containerColor = Color(0xFF333333),
-                title = { Text("Действие", fontSize = 18.sp, color = Color.White) },
+                title = {
+                    Text(
+                        "Действие с сообщением",
+                        fontSize = 18.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 text = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Кнопка "Редактировать"
+                        Button(
+                            onClick = {
+                                val msg = selectedMessageForAction
+                                if (msg != null) {
+                                    // Для фото-сообщений берём только текстовую часть
+                                    if (msg.text.contains("📸описание:")) {
+                                        editText = msg.text.substringBefore("📸описание:").trim()
+                                    } else {
+                                        editText = msg.text
+                                    }
+                                    editingMessage = msg
+                                    selectedMessageForAction = null
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("✏️ Редактировать", color = Color.Black, fontWeight = FontWeight.Medium)
+                        }
+
+                        // Кнопка "Удалить"
                         Button(
                             onClick = {
                                 val msg = selectedMessageForAction
@@ -422,15 +457,113 @@ fun ChatScreen(
                                 selectedMessageForAction = null
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Удалить сообщение", color = Color.White)
+                            Text("🗑️ Удалить сообщение", color = Color.White)
                         }
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = { selectedMessageForAction = null }) {
-                        Text("Отмена", color = Color(0xFFFFD700))
+                        Text("Отмена", color = Color(0xFFFFD700), fontSize = 14.sp)
+                    }
+                }
+            )
+        }
+
+// ДИАЛОГ РЕДАКТИРОВАНИЯ СООБЩЕНИЯ
+        if (editingMessage != null) {
+            var tempEditText by remember { mutableStateOf(editText) }
+
+            // Обновляем tempEditText когда меняется editText
+            LaunchedEffect(editText) {
+                tempEditText = editText
+            }
+
+            AlertDialog(
+                onDismissRequest = {
+                    editingMessage = null
+                    editText = ""
+                },
+                containerColor = Color(0xFF1E1E1E),
+                title = {
+                    Text(
+                        "Редактировать сообщение",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = tempEditText,
+                            onValueChange = { tempEditText = it },
+                            label = { Text("Новый текст", color = Color.Gray) },
+                            textStyle = TextStyle(
+                                color = Color.White,
+                                fontSize = 15.sp
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFFFD700),
+                                unfocusedBorderColor = Color.Gray,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedLabelColor = Color(0xFFFFD700),
+                                unfocusedLabelColor = Color.Gray,
+                                cursorColor = Color(0xFFFFD700)
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2,
+                            maxLines = 5
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Было: ${editingMessage?.text?.take(50)}",
+                            color = Color.Gray,
+                            fontSize = 11.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (tempEditText.isNotBlank() && editingMessage != null) {
+                                val originalMessage = editingMessage!!
+                                var newText = tempEditText
+
+                                if (originalMessage.text.contains("📸описание:")) {
+                                    val uriString = originalMessage.text.substringAfter("📸описание:")
+                                    newText = "$tempEditText 📸описание:$uriString"
+                                }
+
+                                viewModel.editMessage(
+                                    chatId = chatId,
+                                    messageId = originalMessage.id,
+                                    newText = newText
+                                )
+                                editingMessage = null
+                                editText = ""
+                            }
+                        },
+                        enabled = tempEditText.isNotBlank()
+                    ) {
+                        Text(
+                            "Сохранить",
+                            color = if (tempEditText.isNotBlank()) Color(0xFFFFD700) else Color.Gray,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        editingMessage = null
+                        editText = ""
+                    }) {
+                        Text("Отмена", color = Color.Gray, fontSize = 14.sp)
                     }
                 }
             )

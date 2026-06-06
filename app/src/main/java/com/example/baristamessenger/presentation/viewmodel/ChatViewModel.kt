@@ -207,12 +207,10 @@ class ChatViewModel(
             .collection("messages")
             .document(messageId)
 
-        // Проверяем, что пользователь - автор сообщения
         messageRef.get()
             .addOnSuccessListener { document ->
                 val senderId = document.getString("senderId")
                 if (senderId == uid) {
-                    // Обновляем сообщение
                     val updates = mapOf(
                         "text" to newText,
                         "isEdited" to true,
@@ -234,11 +232,6 @@ class ChatViewModel(
                             }
                             _messages.value = updatedMessages
                         }
-                        .addOnFailureListener { e ->
-                            println("Ошибка редактирования: ${e.message}")
-                        }
-                } else {
-                    println("Нельзя редактировать чужое сообщение")
                 }
             }
     }
