@@ -3,6 +3,7 @@ package com.example.baristamessenger.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.baristamessenger.domain.model.User
+import com.example.baristamessenger.domain.model.UserRole
 import com.example.baristamessenger.domain.repository.MessageRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +21,6 @@ class AuthViewModel(
     private val _loginState = MutableStateFlow<StateResult?>(null)
     val loginState: StateFlow<StateResult?> = _loginState.asStateFlow()
 
-    // ВХОД В СИСТЕМУ
     fun login(email: String, javaScriptPasswordText: String) {
         if (email.isBlank() || javaScriptPasswordText.isBlank()) {
             _loginState.value = StateResult.Error("Заполните все поля")
@@ -39,15 +39,15 @@ class AuthViewModel(
         }
     }
 
-    // РЕГИСТРАЦИЯ НОВОГО БАРИСТА
+    // РЕГИСТРАЦИЯ (Обновлено: добавили параметр role)
     fun register(
         firstName: String,
         lastName: String,
         nickname: String,
         email: String,
-        javaScriptPasswordText: String
+        javaScriptPasswordText: String,
+        role: UserRole
     ) {
-        // Проверяем, что вообще ВСЕ поля заполнены
         if (firstName.isBlank() || lastName.isBlank() || nickname.isBlank() || email.isBlank() || javaScriptPasswordText.isBlank()) {
             _loginState.value = StateResult.Error("Заполните абсолютно все поля")
             return
@@ -64,15 +64,14 @@ class AuthViewModel(
                 val authResult = auth.createUserWithEmailAndPassword(email, javaScriptPasswordText).await()
                 val uid = authResult.user?.uid ?: ""
 
-                // Создаем полноценный профиль на основе твоей модели User
                 val newUser = User(
                     id = uid,
-                    firstName = firstName,  // или раздели имя и фамилию
+                    firstName = firstName,
                     lastName = lastName,
                     nickname = nickname,
-                    imageUrl = "", // Заглушка для аватара
-                    role = "Бариста", // Базовая роль для новичка
-                    coffeeShop = nickname // Временно сохраняем никнейм в это поле (или в будущем расширишь модель)
+                    imageUrl = "",
+                    role = role, // Передаем роль из параметров
+                    coffeeShop = nickname
                 )
 
                 repository.saveUserProfile(newUser)
@@ -87,10 +86,9 @@ class AuthViewModel(
         _loginState.value = null
     }
 
-    // ВЕРНУЛИ НА МЕСТО: Вспомогательные классы теперь строго внутри ViewModel
     sealed interface StateResult {
         object Loading : StateResult
         object Success : StateResult
-        data class Error(val errorMessage: String) : StateResult // Переименовали в errorMessage для надежности
+        data class Error(val errorMessage: String) : StateResult
     }
 }

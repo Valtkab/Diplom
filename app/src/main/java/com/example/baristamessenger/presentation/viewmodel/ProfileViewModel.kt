@@ -3,6 +3,7 @@ package com.example.baristamessenger.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.baristamessenger.domain.model.User
+import com.example.baristamessenger.domain.model.UserRole // 1. Импортируем наши роли
 import com.example.baristamessenger.domain.repository.MessageRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -37,7 +38,8 @@ class ProfileViewModel(
     fun loadUserProfile() {
         val uid = auth.currentUser?.uid
         if (uid == null) {
-            _userProfile.value = User(id = "", firstName = "Ошибка", lastName = "", nickname = "")
+            // Исправлено: передаем дефолтную роль при ошибке
+            _userProfile.value = User(id = "", firstName = "Ошибка", lastName = "", nickname = "", role = UserRole.BARISTA)
             _isLoading.value = false
             return
         }
@@ -46,6 +48,13 @@ class ProfileViewModel(
         db.collection("users").document(uid).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
+                    // Безопасно конвертируем строку из базы в наш Enum ролей
+                    val roleStr = document.getString("role") ?: "BARISTA"
+                    val userRole = when (roleStr.uppercase()) {
+                        "MANAGER", "УПРАВЛЯЮЩИЙ" -> UserRole.MANAGER
+                        else -> UserRole.BARISTA
+                    }
+
                     val user = User(
                         id = uid,
                         firstName = document.getString("firstName") ?: "",
@@ -54,15 +63,14 @@ class ProfileViewModel(
                         birthDate = document.getString("birthDate") ?: "",
                         aboutMe = document.getString("aboutMe") ?: "",
                         imageUrl = document.getString("imageUrl") ?: "",
-                        role = document.getString("role") ?: "Бариста",
+                        role = userRole, // Передаем корректный тип UserRole
                         coffeeShop = document.getString("coffeeShop") ?: ""
                     )
                     _userProfile.value = user
                 } else {
-                    // Новый пользователь — создаём пустую запись в Firestore
-                    val newUser = User(id = uid)
+                    // Новый пользователь — создаём пустую запись с базовой ролью бариста
+                    val newUser = User(id = uid, role = UserRole.BARISTA)
                     _userProfile.value = newUser
-                    // Создаём документ в Firestore с пустыми полями
                     saveNewUserToFirestore(newUser)
                 }
                 _isLoading.value = false
@@ -81,7 +89,7 @@ class ProfileViewModel(
             "birthDate" to user.birthDate,
             "aboutMe" to user.aboutMe,
             "imageUrl" to user.imageUrl,
-            "role" to user.role,
+            "role" to user.role.name, // Сохраняем в Firebase как строку ("BARISTA" или "MANAGER")
             "coffeeShop" to user.coffeeShop
         )
         db.collection("users").document(user.id).set(userMap)
@@ -118,7 +126,6 @@ class ProfileViewModel(
         db.collection("users").document(uid)
             .update(updates)
             .addOnSuccessListener {
-                // Обновляем локальный StateFlow
                 val currentUser = _userProfile.value
                 _userProfile.value = currentUser?.copy(
                     firstName = firstName,
@@ -132,7 +139,8 @@ class ProfileViewModel(
                     lastName = lastName,
                     nickname = nickname,
                     birthDate = birthDate,
-                    aboutMe = aboutMe
+                    aboutMe = aboutMe,
+                    role = UserRole.BARISTA // Дефолтное значение для фолбэка
                 )
                 _isSaving.value = false
                 onSuccess()

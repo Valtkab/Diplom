@@ -459,7 +459,6 @@ fun ChatScreen(
         if (editingMessage != null) {
             var tempEditText by remember { mutableStateOf(editText) }
 
-            // Обновляем tempEditText когда меняется editText
             LaunchedEffect(editText) {
                 tempEditText = editText
             }

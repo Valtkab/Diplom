@@ -3,8 +3,14 @@ package com.example.baristamessenger
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,14 +23,14 @@ import com.example.baristamessenger.presentation.viewmodel.ProfileViewModel
 import com.google.firebase.auth.FirebaseAuth
 import org.koin.androidx.compose.koinViewModel
 import androidx.core.view.WindowCompat
+import androidx.compose.runtime.collectAsState
 import com.example.baristamessenger.data.CloudinaryManager
-import org.koin.compose.koinInject
+import androidx.navigation.NavController
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Теперь Android официально разрешает элементам плавно реагировать на клавиатуру.
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContent {
@@ -39,25 +45,52 @@ fun BaristaAppNavigation() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = koinViewModel()
 
-    // 1. Получаем экземпляр Firebase Auth
     val auth = FirebaseAuth.getInstance()
     val currentUser = auth.currentUser
 
-    // 2. Если currentUser не null, значит сессия активна — сразу пускаем в приложение
-    val startScreen = if (currentUser != null) "main_flow" else Screen.Login.route
-
-    // 3. Берем имя пользователя из Firebase (если оно там сохранено) или используем дефолт
+    // Если сессия активна, отправляем на splash для проверки роли, иначе — на логин
+    val startScreen = if (currentUser != null) "splash" else Screen.Login.route
     val userName = currentUser?.displayName ?: "Бариста"
 
     NavHost(
         navController = navController,
         startDestination = startScreen
     ) {
-        // Экран логина
+
+        // ЭКРАН-РАСПРЕДЕЛИТЕЛЬ РОЛЕЙ
+        composable("splash") {
+            val profileViewModel: ProfileViewModel = koinViewModel()
+            val userProfile by profileViewModel.userProfile.collectAsState()
+
+            LaunchedEffect(userProfile) {
+                userProfile?.let { user ->
+                    // Приводим к строке и верхнему регистру для защиты от опечаток
+                    val role = user.role.toString().uppercase()
+                    if (role == "MANAGER") {
+                        navController.navigate("manager_flow") {
+                            popUpTo("splash") { inclusive = true }
+                        }
+                    } else {
+                        navController.navigate("main_flow") {
+                            popUpTo("splash") { inclusive = true }
+                        }
+                    }
+                }
+            }
+
+            // Индикатор загрузки, пока Firebase отдает профиль с ролью
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        }
+
         composable(Screen.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate("main_flow") {
+                    navController.navigate("splash") {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
@@ -69,11 +102,10 @@ fun BaristaAppNavigation() {
             )
         }
 
-        // Экран регистрация
         composable(Screen.Register.route) {
             RegisterScreen(
                 onRegisterSuccess = {
-                    navController.navigate("main_flow") {
+                    navController.navigate("splash") {
                         popUpTo(Screen.Register.route) { inclusive = true }
                     }
                 },
@@ -84,7 +116,6 @@ fun BaristaAppNavigation() {
             )
         }
 
-        // Глобальный экран переписки
         composable(
             route = Screen.Chat.route,
             arguments = listOf(navArgument("chatId") { type = NavType.StringType })
@@ -95,7 +126,7 @@ fun BaristaAppNavigation() {
             )
         }
 
-        // Главный поток приложения (внутри него живет нижнее меню)
+        // ПОТОК ДЛЯ БАРИСТА (Твое текущее основное приложение)
         composable("main_flow") {
             MainFlowScreen(
                 currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: "",
@@ -110,11 +141,21 @@ fun BaristaAppNavigation() {
             )
         }
 
-        // Экран профиля (открывается отдельно, без нижней панели)
-        composable(Screen.Profile.route) {
-            // Получаем ProfileViewModel через Koin
-            val profileViewModel: ProfileViewModel = koinViewModel()
+        // ПОТОК ДЛЯ УПРАВЛЯЮЩЕГО
+        composable("manager_flow") {
+            ManagerWorkspaceScreen(
+                navController = navController,
+                onLogout = {
+                    FirebaseAuth.getInstance().signOut()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo("manager_flow") { inclusive = true }
+                    }
+                }
+            )
+        }
 
+        composable(Screen.Profile.route) {
+            val profileViewModel: ProfileViewModel = koinViewModel()
             ProfileScreen(
                 viewModel = profileViewModel,
                 onBackClick = { navController.popBackStack() },
@@ -127,15 +168,15 @@ fun BaristaAppNavigation() {
             )
         }
 
-        // Внутренние экраны фич (открываются поверх нижней панели)
         composable(Screen.Calculator.route) {
             CostCalculatorScreen(onBackClick = { navController.popBackStack() })
         }
 
-        // При переходе на Биржу откроется твой чистый экран из WorkspaceScreen!
         composable(Screen.Exchange.route) {
             WorkspaceScreen(onBackClick = { navController.popBackStack() })
         }
     }
-
 }
+
+// ЭКРАН-ЗАГЛУШКА ДЛЯ УПРАВЛЯЮЩЕГО (С кнопками перехода в твои калькулятор и биржу)
+

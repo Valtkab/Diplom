@@ -47,7 +47,7 @@ fun UserPickerDialog(
 
                         Text("${user.firstName} ${user.lastName}".trim())
 
-                        Text(user.role)
+                        Text(text = user.role.name)
                     }
                 }
             }

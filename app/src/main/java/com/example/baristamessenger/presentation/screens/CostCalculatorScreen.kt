@@ -1,13 +1,12 @@
 package com.example.baristamessenger.presentation.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons // ДОБАВЛЕН ИМПОРТ
-import androidx.compose.material.icons.automirrored.filled.ArrowBack // ДОБАВЛЕН ИМПОРТ
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +21,7 @@ import com.example.baristamessenger.domain.model.Ingredient
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CostCalculatorScreen(
-    onBackClick: () -> Unit // Добавили и подключили параметр кнопки назад
+    onBackClick: () -> Unit
 ) {
     var drinkName by remember { mutableStateOf("Лавандовый раф") }
     var drinkVolume by remember { mutableStateOf("350") }
@@ -60,7 +59,6 @@ fun CostCalculatorScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Калькулятор себестоимости", color = Color.White) },
-                // ИСПРАВЛЕНО: Добавлена кнопка возврата на предыдущий экран
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
