@@ -175,6 +175,10 @@ fun BaristaAppNavigation() {
         composable(Screen.Exchange.route) {
             WorkspaceScreen(onBackClick = { navController.popBackStack() })
         }
+
+        composable("order_screen") {
+            OrderScreen() // Здесь можно передать OrderViewModel, если создашь
+        }
     }
 }
 
